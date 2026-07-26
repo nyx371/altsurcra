@@ -1,8 +1,17 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.1.0';
+const GAME_VERSION = '0.1.1';
 
 const CHANGELOG = [
+  {
+    version: '0.1.1',
+    name: 'Steady Hands',
+    date: '2026-07-26',
+    notes: [
+      'Blocked double-tap zoom, pinch zoom, text selection and the iOS long-press magnifier',
+      'Buttons respond instantly to taps; crafting panels still scroll normally',
+    ],
+  },
   {
     version: '0.1.0',
     name: 'First Climb',

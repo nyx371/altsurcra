@@ -185,6 +185,21 @@ const GOALS = [
 
 // ---------- input ----------
 
+// Suppress browser touch gestures: pinch zoom, double-tap zoom, long-press menus.
+// (The viewport meta asks for no zoom too, but iOS Safari ignores user-scalable=no.)
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('gesturechange', e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+document.addEventListener('contextmenu', e => e.preventDefault());
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  // buttons rely on the synthetic click and are covered by touch-action: manipulation
+  if (e.target.closest && e.target.closest('button, a')) return;
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && e.cancelable) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+
 const input = { x: 0, y: 0, jumpHeld: false, jumpPressed: false, interactHeld: false };
 const btnState = { jump: false, interact: false };
 const keys = {};

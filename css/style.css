@@ -1,4 +1,8 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0; padding: 0; box-sizing: border-box;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; /* no iOS long-press callout/magnifier loupe */
+}
 
 html, body {
   width: 100%; height: 100%;
@@ -155,10 +159,13 @@ svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 }
 .overlay.hidden { display: none; }
 
+button { touch-action: manipulation; } /* taps fire instantly, double-tap never zooms */
+
 .panel {
   width: min(440px, 94vw);
   max-height: 84vh;
   overflow-y: auto;
+  touch-action: pan-y; /* panels may scroll vertically, nothing else */
   background: #101a35;
   border: 1px solid rgba(140, 180, 255, .35);
   border-radius: 16px;
