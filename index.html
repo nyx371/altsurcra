@@ -31,13 +31,15 @@
   <button class="abtn hidden" id="btn-base" type="button"><span class="abtn-icon"></span></button>
   <button class="abtn" id="btn-pack" type="button"><span class="abtn-icon"></span></button>
   <button class="abtn" id="btn-interact" type="button"><span class="abtn-icon"></span><svg class="abtn-ring" viewBox="0 0 72 72"><circle cx="36" cy="36" r="33"></circle></svg></button>
+  <button class="abtn hidden" id="btn-visor" type="button"><span class="abtn-icon"></span></button>
+  <button class="abtn hidden" id="btn-release" type="button"><span class="abtn-icon"></span></button>
   <button class="abtn hidden" id="btn-jet" type="button"><span class="abtn-icon"></span></button>
   <button class="abtn big" id="btn-jump" type="button"><span class="abtn-icon"></span></button>
 </div>
 
 <div class="overlay hidden" id="overlay-pack">
   <div class="panel">
-    <div class="panel-head"><span class="panel-icon" id="pack-icon"></span><h2>Pack &amp; Personal Fabricator</h2><button class="close-btn" data-close type="button">&times;</button></div>
+    <div class="panel-head"><span class="panel-icon" id="pack-icon"></span><h2>Pack &amp; Personal Fabricator</h2></div>
     <h3>Supplies</h3>
     <div id="inv-grid" class="inv-grid"></div>
     <h3>Fabricate</h3>
@@ -50,26 +52,29 @@
       <button class="mini-btn" type="button" data-cheat="gear">Unlock all gear</button>
       <button class="mini-btn" type="button" data-cheat="vitals">Refill vitals</button>
     </div>
+    <button class="close-bar" data-close type="button">Close</button>
   </div>
 </div>
 
 <div class="overlay hidden" id="overlay-base">
   <div class="panel">
-    <div class="panel-head"><span class="panel-icon" id="base-icon"></span><h2 id="base-title">Base</h2><button class="close-btn" data-close type="button">&times;</button></div>
+    <div class="panel-head"><span class="panel-icon" id="base-icon"></span><h2 id="base-title">Base</h2></div>
     <p class="panel-note" id="base-note"></p>
     <h3>Storage <button id="btn-deposit" class="mini-btn" type="button">Deposit all</button></h3>
     <div id="base-store" class="inv-grid"></div>
     <h3>Fabricate</h3>
     <div id="base-recipe-list" class="recipe-list"></div>
+    <button class="close-bar" data-close type="button">Close</button>
   </div>
 </div>
 
 <div class="overlay hidden" id="overlay-changelog">
   <div class="panel">
-    <div class="panel-head"><span class="panel-icon" id="cl-icon"></span><h2>Skyreach — builds</h2><button class="close-btn" data-close type="button">&times;</button></div>
+    <div class="panel-head"><span class="panel-icon" id="cl-icon"></span><h2>Skyreach — builds</h2></div>
     <button id="btn-reset" class="mini-btn danger" type="button">Restart — wipe save &amp; remix world</button>
     <div id="changelog-body"></div>
     <p class="panel-note">Progress saves to this device automatically. Icons by <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> contributors (CC BY 3.0).</p>
+    <button class="close-bar" data-close type="button">Close</button>
   </div>
 </div>
 

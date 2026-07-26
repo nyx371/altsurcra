@@ -21,6 +21,8 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Jump · hold to glide (needs Glider) | right big button | Space |
 | Harvest / catch a lizard (hold) · Glove pulse (tap, once crafted) | hand button | E |
 | Jetpack thrust (hold, once crafted) | thruster button | Shift |
+| Let go of the wall | release button (appears while climbing) | Q |
+| Range visor: zoom way out (once crafted) | binocular button | V |
 | Enter base | house button (appears in range) | E |
 | Pack + personal fabricator | knapsack button | C |
 | Changelog + wipe save / remix world | version badge (top right) | — |
@@ -38,6 +40,8 @@ Every new game generates a fresh island chain from a random seed — resuming ke
 Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to catch one, and **sky trout** are caught by gliding straight through them. Both respawn, and both are crafting inputs — lizards for Spring boots and Scale armor, trout for the Jetpack and Resonant magnets.
 
 Fabricators pool materials from your pack **and** the storage of any base you're standing in, so you never have to shuttle rocks out of a chest you're next to.
+
+**Thermals** — faint columns of rising air between islands — lift you *upward* while gliding, and the Thermal wing rides them hard. **Ridgerunners** patrol island tops and charge: barely any damage, but the shove will put you over an edge.
 
 Progress autosaves to your device.
 

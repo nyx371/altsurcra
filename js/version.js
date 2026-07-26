@@ -1,8 +1,21 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.5.0';
+const GAME_VERSION = '0.6.0';
 
 const CHANGELOG = [
+  {
+    version: '0.6.0',
+    name: 'The Shear',
+    date: '2026-07-26',
+    notes: [
+      'Thermals: glide into a rising column to gain altitude for free — the Thermal wing rides them hard',
+      'Ridgerunners patrol island tops and charge: little damage, but they shove you off the edge',
+      'Dedicated let-go button while climbing, so you can drop off a wall on purpose',
+      'Range visor: craftable, toggles a far-out view of the sky for reading a route',
+      'Close button now sits fixed at the bottom of every menu',
+      'Hardened against the iOS long-press magnifier and text selection',
+    ],
+  },
   {
     version: '0.5.0',
     name: 'Livestock',

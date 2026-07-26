@@ -82,6 +82,13 @@ const T = {
   jetFuel2: 100,
   armorSoak: 0.45,        // damage removed by scale armor
   medkitHeal: 45,
+  thermalLift: -115,      // glide descent inside a thermal (negative = rising)
+  thermalLiftWing: -235,  // with the thermal wing fitted
+  visorZoom: 0.5,         // camera scale multiplier while the visor is up
+  runnerSpeed: 96,
+  runnerCharge: 275,
+  runnerDamage: 6,
+  runnerKnock: 430,
 };
 
 const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'basekit'];
@@ -116,6 +123,7 @@ const NODE_TYPES = {
 const WORLD = { left: 20, right: 4000, top: 300, cloudSea: 2880, kill: 2960 };
 
 let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [], skyfish = [];
+let thermals = [], runners = [];
 let CAMP = { x: 300, y: 2500 };
 let worldSeed = 0;
 
@@ -126,6 +134,7 @@ function generateWorld(seed) {
   const RI = (a, b) => Math.floor(R(a, b + 1));
 
   rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = []; skyfish = [];
+  thermals = []; runners = [];
 
   const addCliff = (x, y, w, h, type, taper) => {
     const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type, taper: taper || 0 };
@@ -143,6 +152,20 @@ function generateWorld(seed) {
   // sky trout: neutral drifters in the open air between islands
   const addSkyfish = (x, y) => {
     skyfish.push({ home: { x, y }, x, y, t: R(0, 6), dir: 1, shy: 0, goneUntil: 0 });
+  };
+  // rising air: glide into a column to gain altitude instead of spending it
+  const addThermal = (x, top, bottom) => {
+    thermals.push({ x: Math.round(x), w: Math.round(R(90, 150)), top: Math.round(top), bottom: Math.round(bottom), t: R(0, 6) });
+  };
+  // ridgerunner: walks an island top and shoulder-charges you off the edge.
+  // `farFrom` keeps the starter one away from camp so you meet it by exploring.
+  const addRunner = (r, farFrom) => {
+    let x = R(r.x + 20, r.x + r.w - 20);
+    if (farFrom !== undefined) {
+      const mid = r.x + r.w / 2;
+      x = farFrom < mid ? R(mid + r.w * 0.15, r.x + r.w - 20) : R(r.x + 20, mid - r.w * 0.15);
+    }
+    runners.push({ rock: r, x, dir: rnd() < 0.5 ? -1 : 1, mode: 'patrol', cd: 0, t: R(0, 5) });
   };
   const ledgeOn = (r) => {
     // a small standable shelf overlapping the face
@@ -188,6 +211,7 @@ function generateWorld(seed) {
   }
   while (groundFiber < 4) groundNode('fiber', sx + startW * R(0.2, 0.85), groundY);
   while (groundStone < 4) groundNode('stone', sx + startW * R(0.2, 0.85), groundY);
+  if (rnd() < 0.7) addRunner(slab0, CAMP.x);
 
   const nTowers = RI(2, 3);
   let launch = { x: CAMP.x, top: groundY };
@@ -264,6 +288,11 @@ function generateWorld(seed) {
     }
     addLizard(tower);
     if (rnd() < 0.6) addLizard(slab);
+    if (rnd() < 0.7) addRunner(slab);
+
+    // a thermal in the gap you just crossed, rising past the new island
+    addThermal(dir > 0 ? x - R(60, 190) : x + slabW + R(60, 190),
+      Math.max(WORLD.top + 200, slabTop - R(420, 700)), slabTop + R(120, 260));
     // trout school the gaps you glide across
     const school = RI(1, 2);
     for (let k = 0; k < school; k++) {
@@ -294,6 +323,10 @@ function generateWorld(seed) {
   // a couple of trout drift near the start island so the first ones are findable
   for (let k = 0; k < 2; k++) addSkyfish(sx + startW * R(0.2, 1.1), groundY - R(150, 330));
 
+  // a thermal beside the start island, and one running the summit spike
+  addThermal(sx + startW + R(60, 170), groundY - R(500, 800), groundY + 120);
+  addThermal(spike.x + spike.w / 2 + R(-190, 190), spike.y - R(80, 220), spike.y + spikeH * 0.8);
+
   WORLD.top = Math.min(...rocks.map(r => r.y)) - 500;
   void lastTower;
 }
@@ -323,7 +356,9 @@ const RECIPES = [
   { id: 'battery1', tier: 'personal', name: 'Battery Mk1',       icon: 'battery-pack',    cost: { ore: 2, crystal: 2 },              desc: 'Energy 100 → 150.', flag: 'battery1', once: true },
   { id: 'spikes',   tier: 'personal', name: 'Grip spikes',       icon: 'spikes',          cost: { ore: 3, stone: 2 },                desc: 'Climb basalt.', flag: 'spikes', once: true },
   { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',           cost: { stone: 6, fiber: 4 },              desc: 'Storage, recharge, respawn.' },
+  { id: 'visor',    tier: 'personal', name: 'Range visor',       icon: 'binoculars',      cost: { crystal: 2, ore: 2, fiber: 2 },    desc: 'Toggle a long view of the sky.', flag: 'visor', once: true },
   { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 },              desc: 'Heavy fabrication here.' },
+  { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'windy-stripes',   cost: { fiber: 6, crystal: 3, skyfish: 3 }, desc: 'Ride thermals hard. Needs Glider.', flag: 'thermal', once: true, needs: 'glider' },
   { id: 'jetpack',  tier: 'mk2',      name: 'Jetpack',           icon: 'jet-pack',        cost: { ore: 4, crystal: 3, skyfish: 2 },  desc: 'Short burst of lift. Needs Glider.', flag: 'jetpack', once: true, needs: 'glider' },
   { id: 'jetpack2', tier: 'mk2',      name: 'Ripwing jets',      icon: 'thrust',          cost: { ore: 6, crystal: 6, skyfish: 4 },  desc: 'Bigger tank, harder push.', flag: 'jetpack2', once: true, needs: 'jetpack' },
   { id: 'armor',    tier: 'mk2',      name: 'Scale armor',       icon: 'armor-vest',      cost: { lizard: 4, ore: 4, fiber: 3 },     desc: 'Take much less damage.', flag: 'armor', once: true },
@@ -352,8 +387,9 @@ const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crysta
 const flags = {
   gloves: false, glider: false, boots: false, pulse: false,
   battery1: false, battery2: false, spikes: false, magnets: false,
-  jetpack: false, jetpack2: false, armor: false,
+  jetpack: false, jetpack2: false, armor: false, visor: false, thermal: false,
 };
+let visorOn = false;
 const bases = [];   // {x, y, mk2, wall, store:{}, deck:rect}
 let deaths = 0;
 let paused = false;
@@ -383,6 +419,14 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('gesturechange', e => e.preventDefault());
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 document.addEventListener('contextmenu', e => e.preventDefault());
+// belt and braces against the iOS long-press magnifier: no selection may start,
+// and any that somehow does gets dropped immediately
+document.addEventListener('selectstart', e => e.preventDefault());
+document.addEventListener('dragstart', e => e.preventDefault());
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection && window.getSelection();
+  if (sel && !sel.isCollapsed) sel.removeAllRanges();
+});
 let lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
   // Menus need rapid repeat taps (craft, eat, take); only the game surface
@@ -433,6 +477,8 @@ const btnInteract = document.getElementById('btn-interact');
 const btnPack = document.getElementById('btn-pack');
 const btnBase = document.getElementById('btn-base');
 const btnJet = document.getElementById('btn-jet');
+const btnRelease = document.getElementById('btn-release');
+const btnVisor = document.getElementById('btn-visor');
 
 function bindHold(el, prop) {
   el.addEventListener('pointerdown', e => {
@@ -452,6 +498,14 @@ bindHold(btnInteract, 'interact');
 bindHold(btnJet, 'jet');
 btnPack.addEventListener('click', () => togglePack());
 btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBase(b); });
+btnRelease.addEventListener('click', releaseClimb);
+btnVisor.addEventListener('click', toggleVisor);
+
+function toggleVisor() {
+  if (!flags.visor) return;
+  visorOn = !visorOn;
+  btnVisor.classList.toggle('on', visorOn);
+}
 
 window.addEventListener('keydown', e => {
   if (e.repeat) return;
@@ -459,6 +513,8 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Space') { input.jumpPressed = true; e.preventDefault(); }
   if (e.code === 'KeyE') input.interactPressed = true;
   if (e.code === 'KeyC') togglePack();
+  if (e.code === 'KeyQ') releaseClimb();
+  if (e.code === 'KeyV') toggleVisor();
   if (e.code === 'Escape') closeOverlays();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -543,6 +599,23 @@ function detach(push) {
   player.state = 'air';
   player.climbRect = null;
   player.detachTimer = push ? 0.35 : 0.15;
+}
+
+// Deliberate let-go: drop straight off the wall without the shove a jump gives.
+function releaseClimb() {
+  if (player.state !== 'climb') return;
+  detach(true);
+  player.vx = 0;
+  player.vy = 40;
+  player.harvest = null;
+}
+
+function inThermal() {
+  const cx = player.x + P_W / 2, cy = player.y + P_H / 2;
+  for (const th of thermals) {
+    if (cx > th.x - th.w / 2 && cx < th.x + th.w / 2 && cy > th.top && cy < th.bottom) return th;
+  }
+  return null;
 }
 
 function nearCampOrBase() {
@@ -635,7 +708,11 @@ function updatePlayer(dt) {
 
     if (player.state === 'glide') {
       if (!input.jumpHeld || !flags.glider) player.state = 'air';
-      else player.vy += (T.glideFall - player.vy) * clamp(4 * dt, 0, 1);
+      else {
+        // rising air turns a glide into a climb — the only way up that costs nothing
+        const lift = inThermal() ? (flags.thermal ? T.thermalLiftWing : T.thermalLift) : T.glideFall;
+        player.vy += (lift - player.vy) * clamp(4 * dt, 0, 1);
+      }
     }
     if (player.state === 'air') {
       player.vy += T.gravity * dt;
@@ -783,6 +860,7 @@ function threatInRange(radius) {
   const px = player.x + P_W / 2, py = player.y + P_H / 2;
   for (const w of stingwings) if (dist(px, py, w.x, w.y) < radius) return true;
   for (const b of razorbeaks) if (dist(px, py, b.x, b.y) < radius) return true;
+  for (const r of runners) if (dist(px, py, r.x, r.rock.y - 18) < radius) return true;
   return false;
 }
 
@@ -796,6 +874,11 @@ function firePulse() {
   }
   for (const b of razorbeaks) {
     if (dist(px, py, b.x, b.y) < T.pulseRadius) { b.mode = 'rise'; b.cd = 5; }
+  }
+  for (const r of runners) {
+    if (dist(px, py, r.x, r.rock.y - 18) < T.pulseRadius) {
+      r.mode = 'patrol'; r.cd = 4; r.dir = r.x < px ? -1 : 1;
+    }
   }
 }
 
@@ -851,6 +934,8 @@ function updateInteraction(dt) {
   btnInteract.classList.toggle('glide-ready', !!node || !!critter);
   btnBase.classList.toggle('hidden', !nearestBase());
   btnJet.classList.toggle('hidden', !flags.jetpack);
+  btnRelease.classList.toggle('hidden', player.state !== 'climb');
+  btnVisor.classList.toggle('hidden', !flags.visor);
 }
 
 // ---------- creatures ----------
@@ -954,6 +1039,48 @@ function updateSkyfish(dt) {
   }
 }
 
+// Ridgerunner: patrols an island top, then shoulder-charges. Barely hurts —
+// the danger is the shove and the edge behind you.
+function updateRunners(dt) {
+  const pc = playerCenter();
+  for (const rr of runners) {
+    const r = rr.rock;
+    rr.t += dt;
+    rr.cd = Math.max(0, rr.cd - dt);
+    const onSameTop = player.state === 'ground' && Math.abs(player.y + P_H - r.y) < 4 &&
+      player.x + P_W > r.x && player.x < r.x + r.w;
+    const dx = pc.x - rr.x;
+
+    if (rr.mode === 'patrol') {
+      rr.x += rr.dir * T.runnerSpeed * dt;
+      if (rr.x < r.x + 14) { rr.x = r.x + 14; rr.dir = 1; }
+      if (rr.x > r.x + r.w - 14) { rr.x = r.x + r.w - 14; rr.dir = -1; }
+      if (onSameTop && Math.abs(dx) < 300 && rr.cd <= 0 && !deathCause) {
+        rr.mode = 'charge';
+        rr.dir = dx > 0 ? 1 : -1;
+        rr.chargeT = 0;
+      }
+    } else {
+      rr.chargeT += dt;
+      rr.x += rr.dir * T.runnerCharge * dt;
+      // it will not run off its own island
+      if (rr.x < r.x + 12 || rr.x > r.x + r.w - 12) {
+        rr.x = clamp(rr.x, r.x + 12, r.x + r.w - 12);
+        rr.mode = 'patrol'; rr.cd = 2.2;
+      }
+      if (rr.chargeT > 2.4) { rr.mode = 'patrol'; rr.cd = 1.6; }
+      if (Math.abs(dx) < 24 && Math.abs(pc.y - (r.y - 18)) < 46 && rr.cd <= 0) {
+        hurt(T.runnerDamage, 'Run down by a ridgerunner');
+        player.vx = rr.dir * T.runnerKnock;
+        player.vy = -230;
+        player.state = 'air';
+        rr.cd = 1.4;
+        rr.mode = 'patrol';
+      }
+    }
+  }
+}
+
 function updateLizards(dt) {
   const pc = playerCenter();
   for (const l of lizards) {
@@ -1042,6 +1169,8 @@ function craft(recipe, base) {
   if (recipe.id === 'armor') { flags.armor = true; toast('Scale armor fitted', 'good', 'armor-vest'); }
   if (recipe.id === 'jetpack') { flags.jetpack = true; player.fuel = maxFuel(); toast('Jetpack — hold the thruster', 'good', 'jet-pack'); }
   if (recipe.id === 'jetpack2') { flags.jetpack2 = true; player.fuel = maxFuel(); toast('Ripwing jets — bigger tank', 'good', 'thrust'); }
+  if (recipe.id === 'visor') { flags.visor = true; toast('Range visor — tap to look far', 'good', 'binoculars'); }
+  if (recipe.id === 'thermal') { flags.thermal = true; toast('Thermal wing — ride the updrafts', 'good', 'windy-stripes'); }
   if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated', 'good', 'hang-glider'); }
   if (recipe.id === 'pulse') { flags.pulse = true; toast('Glove pulse armed', 'good', 'spiky-explosion'); }
   if (recipe.id === 'spikes') { flags.spikes = true; toast('Grip spikes fitted', 'good', 'spikes'); }
@@ -1399,6 +1528,8 @@ document.querySelector('#bar-food .bar-icon').innerHTML = svgIcon('meat');
 document.querySelector('#bar-energy .bar-icon').innerHTML = svgIcon('power-lightning');
 document.querySelector('#bar-fuel .bar-icon').innerHTML = svgIcon('fuel-tank');
 document.querySelector('#btn-jet .abtn-icon').innerHTML = svgIcon('jet-pack');
+document.querySelector('#btn-release .abtn-icon').innerHTML = svgIcon('falling');
+document.querySelector('#btn-visor .abtn-icon').innerHTML = svgIcon('binoculars');
 document.querySelector('#version-badge .badge-icon').innerHTML = svgIcon('mountain-climbing');
 document.getElementById('version-text').textContent = 'v' + GAME_VERSION;
 document.querySelector('#btn-pack .abtn-icon').innerHTML = svgIcon('knapsack');
@@ -1439,12 +1570,14 @@ const ctx = canvas.getContext('2d');
 let cw = 0, chh = 0, dpr = 1, scale = 1;
 const cam = { x: 300, y: 2400 };
 
+let baseScale = 1;
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   cw = window.innerWidth; chh = window.innerHeight;
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(chh * dpr);
-  scale = Math.max(Math.min(cw / 450, chh / 750), 0.6);
+  baseScale = Math.max(Math.min(cw / 450, chh / 750), 0.6);
+  scale = baseScale;
 }
 window.addEventListener('resize', resize);
 resize();
@@ -1540,7 +1673,40 @@ function render() {
 
   for (const c of clouds) if (c.layer === 0) drawIcon(ctx, 'fluffy-cloud', c.x, c.y, c.s, '#ffffff', c.a);
 
+  // thermals: columns of rising air, drawn behind the rock
+  const activeThermal = inThermal();
+  for (const th of thermals) {
+    const hot = th === activeThermal;
+    const g2 = ctx.createLinearGradient(0, th.bottom, 0, th.top);
+    g2.addColorStop(0, hot ? 'rgba(255,214,107,0.20)' : 'rgba(200,230,255,0.10)');
+    g2.addColorStop(1, 'rgba(200,230,255,0)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(th.x - th.w / 2, th.top, th.w, th.bottom - th.top);
+    // motes streaming upward
+    const span = th.bottom - th.top;
+    for (let i = 0; i < 7; i++) {
+      const phase = (gameTime * (hot ? 150 : 80) + i * span / 7) % span;
+      const my = th.bottom - phase;
+      const mx = th.x + Math.sin((gameTime + i) * 1.6) * th.w * 0.3;
+      drawIcon(ctx, 'windy-stripes', mx, my, hot ? 22 : 16, hot ? '#ffd76b' : '#cfe0ff', hot ? 0.5 : 0.28);
+    }
+  }
+
   for (const r of rocks) drawCliff(r);
+
+  // ridgerunners patrol island tops
+  for (const rr of runners) {
+    ctx.save();
+    ctx.translate(rr.x, rr.rock.y - 17 + Math.abs(Math.sin(rr.t * (rr.mode === 'charge' ? 14 : 6))) * 2);
+    if (rr.dir < 0) ctx.scale(-1, 1);
+    drawIcon(ctx, 'boar', 0, 0, 36, rr.mode === 'charge' ? '#e08a5a' : '#9a7355');
+    ctx.restore();
+    if (rr.mode === 'charge') {
+      ctx.globalAlpha = 0.5;
+      drawIcon(ctx, 'windy-stripes', rr.x - rr.dir * 26, rr.rock.y - 20, 18, '#e08a5a');
+      ctx.globalAlpha = 1;
+    }
+  }
 
   // camp
   drawZone(CAMP.x, CAMP.y, '#ffb454');
@@ -1679,6 +1845,17 @@ function render() {
 
   ctx.restore();
 
+  // visor tint, so the pulled-back view reads as looking through something
+  if (visorOn && flags.visor) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(159,245,196,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(8, 8, cw - 16, chh - 16);
+    ctx.fillStyle = 'rgba(120,255,190,0.05)';
+    ctx.fillRect(0, 0, cw, chh);
+    ctx.restore();
+  }
+
   if (gameTime < saveNoticeUntil) {
     ctx.save();
     ctx.globalAlpha = clamp(saveNoticeUntil - gameTime, 0, 1) * 0.7;
@@ -1785,6 +1962,7 @@ function frame(now) {
     updateRazorbeaks(dt);
     updateLizards(dt);
     updateSkyfish(dt);
+    updateRunners(dt);
     if (pulseFx) { pulseFx.t += dt; if (pulseFx.t > 0.45) pulseFx = null; }
     if (jumpFx) { jumpFx.t += dt; if (jumpFx.t > 0.3) jumpFx = null; }
     for (const c of clouds) {
@@ -1796,6 +1974,10 @@ function frame(now) {
   }
   input.jumpPressed = false;
   input.interactPressed = false;
+
+  // the visor pulls the camera way back so you can read a route before committing
+  const wantScale = baseScale * (visorOn && flags.visor ? T.visorZoom : 1);
+  scale = lerp(scale, wantScale, clamp(6 * dt, 0, 1));
 
   const targetX = clamp(player.x + P_W / 2, 0, WORLD.right);
   const targetY = clamp(player.y, WORLD.top, WORLD.cloudSea + 60 - chh / scale / 2);
@@ -1820,7 +2002,7 @@ initClouds();
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Livestock', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — The Shear', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -1839,7 +2021,11 @@ window.SKYREACH = {
   get razorbeaks() { return razorbeaks; },
   get lizards() { return lizards; },
   get skyfish() { return skyfish; },
-  maxFuel,
+  get thermals() { return thermals; },
+  get runners() { return runners; },
+  get visorOn() { return visorOn; },
+  get scale() { return scale; },
+  maxFuel, releaseClimb, toggleVisor,
   get camp() { return CAMP; },
   get seed() { return worldSeed; },
   getLastSafe: () => lastSafe,

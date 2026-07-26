@@ -2,6 +2,15 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.6.0 — The Shear (2026-07-26)
+
+- Thermals: glide into a rising column to gain altitude for free — the Thermal wing rides them hard
+- Ridgerunners patrol island tops and charge: little damage, but they shove you off the edge
+- Dedicated let-go button while climbing, so you can drop off a wall on purpose
+- Range visor: craftable, toggles a far-out view of the sky for reading a route
+- Close button now sits fixed at the bottom of every menu
+- Hardened against the iOS long-press magnifier and text selection
+
 ## v0.5.0 — Livestock (2026-07-26)
 
 - Fabricators draw materials from your pack AND the storage of any base in range

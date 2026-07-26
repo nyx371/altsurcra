@@ -1,8 +1,21 @@
 * {
   margin: 0; padding: 0; box-sizing: border-box;
-  -webkit-user-select: none; user-select: none;
-  -webkit-touch-callout: none; /* no iOS long-press callout/magnifier loupe */
+  /* every vendor spelling: older iOS Safari ignores the unprefixed forms and
+     will otherwise raise the selection loupe on a long press */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
 }
+
+/* nothing in the game is selectable text, so kill the highlight outright */
+::selection { background: transparent; }
+::-moz-selection { background: transparent; }
+
+img, svg, canvas { -webkit-user-drag: none; pointer-events: none; }
+button svg, .abtn svg, .inv-item svg { pointer-events: none; }
 
 html, body {
   width: 100%; height: 100%;
@@ -16,7 +29,12 @@ html, body {
   overscroll-behavior: none;
 }
 
-#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#game {
+  position: fixed; inset: 0; width: 100%; height: 100%; display: block;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
 
 svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 
@@ -131,6 +149,9 @@ svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 #btn-base { border-color: rgba(143, 199, 255, .65); color: #8fc7ff; }
 #btn-jet { border-color: rgba(255, 215, 107, .65); color: #ffd76b; }
 #btn-jet.held { background: rgba(255, 168, 60, .5); color: #fff; }
+#btn-release { border-color: rgba(255, 138, 148, .7); color: #ff8a94; }
+#btn-visor { border-color: rgba(180, 255, 220, .6); color: #9ff5c4; }
+#btn-visor.on { background: rgba(120, 255, 190, .3); color: #fff; }
 .abtn:active, .abtn.held { background: rgba(89, 160, 255, .45); color: #fff; }
 .abtn-icon { position: absolute; inset: 22%; pointer-events: none; }
 .abtn.glide-ready { color: #8fe3ff; border-color: rgba(143, 227, 255, .6); }
@@ -177,11 +198,20 @@ button { touch-action: manipulation; } /* taps fire instantly, double-tap never 
 .panel-icon { width: 24px; height: 24px; color: #aecbff; flex: none; }
 .panel-note { font-size: 12px; color: #9db2d8; margin-top: 10px; line-height: 1.5; }
 .panel-note a { color: #8fc7ff; }
-.close-btn {
-  width: 34px; height: 34px; border-radius: 50%; border: none;
-  background: rgba(255,255,255,.1); color: #cfe0ff;
-  font-size: 20px; line-height: 1; cursor: pointer; flex: none;
+/* Close sits at the bottom of the panel and stays there while the panel scrolls,
+   so it is always under the thumb rather than up at the top corner. */
+.close-bar {
+  position: sticky; bottom: -16px;
+  display: block; width: calc(100% + 32px);
+  margin: 14px -16px -16px;
+  padding: 15px 12px calc(15px + env(safe-area-inset-bottom, 0px));
+  border: none; border-top: 1px solid rgba(255,255,255,.12);
+  border-radius: 0 0 15px 15px;
+  background: #17224a; color: #cfe0ff;
+  font-size: 15px; font-weight: 600;
+  cursor: pointer; touch-action: manipulation;
 }
+.close-bar:active { background: #24356b; color: #fff; }
 
 .inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 8px; }
 .inv-item {
