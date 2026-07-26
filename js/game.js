@@ -1,5 +1,9 @@
-/* Skyreach v0.1 — vanilla JS, no dependencies.
+/* Skyreach v0.3 — vanilla JS, no dependencies.
  * World units are pixels; y grows downward. One canvas for the world, DOM for UI.
+ *
+ * v0.3 world model: cliffs never block movement. You walk in front of them, grab
+ * their face (hold up) to climb anywhere on it, and stand on their tops. The world
+ * is remixed from a seed on every new game.
  */
 (function () {
 'use strict';
@@ -9,6 +13,15 @@
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
 
 function svgIcon(name) {
   return '<svg viewBox="0 0 512 512" aria-hidden="true">' + ICONS[name] + '</svg>';
@@ -39,75 +52,186 @@ const T = {
   maxFall: 950,
   walkSpeed: 185,
   jumpVel: 560,
-  climbSpeed: 110,
+  climbSpeed: 110,      // vertical, on a face
+  climbSpeedX: 90,      // horizontal, on a face
   climbDrainMove: 16,   // energy/s while moving on a wall
   climbDrainIdle: 0.9,  // energy/s hanging still — cheap enough to stop and plan a route
   harvestWallCost: 10,  // flat energy per wall harvest
   harvestTime: 0.9,
-  regenGround: 7,       // energy/s standing anywhere safe
-  regenCamp: 30,        // energy/s inside a camp/base radius
+  regenGround: 7,
+  regenCamp: 30,
   campRadius: 150,
   glideFall: 135,
   glideSpeed: 270,
   foodDrain: 0.35,
   starveDps: 2,
-  healthRegen: 1.5,     // hp/s when food > 60
+  healthRegen: 1.5,
   fallSafeVel: 620,
   fallDmgScale: 0.09,
   invulnTime: 0.9,
   cacheGrabRadius: 60,
+  pulseCost: 12,
+  pulseRadius: 130,
 };
 
 // Raw materials scatter into a recoverable cache on death; crafted upgrades never do.
 const DROP_ON_DEATH = ['berry', 'ration', 'fiber', 'stone', 'ore', 'crystal', 'basekit'];
 
-// ---------- world ----------
-
-// Solid rock. kind 'perch' = one-way rest ledge (land from above, climb through).
-const ROCKS = [
-  { x: 150,  y: 2500, w: 900, h: 300, taper: 150, name: 'Haven Rock' },
-  { x: 820,  y: 2100, w: 230, h: 400, taper: 0 },                       // practice cliff
-  { x: 770,  y: 2320, w: 50,  h: 24, taper: 0, kind: 'perch' },
-  { x: 1450, y: 2350, w: 400, h: 450, taper: 170, name: 'Skyshard Spire' },
-  { x: 1650, y: 1750, w: 200, h: 600, taper: 0 },                       // spire tower
-  { x: 1594, y: 2050, w: 56,  h: 24, taper: 0, kind: 'perch' },
-  { x: 1800, y: 850,  w: 56,  h: 900, taper: 0, name: 'The Needle' },   // summit spike
-];
-
-const WORLD = { left: 20, right: 2380, top: 500, cloudSea: 2880, kill: 2960 };
-
-const NODE_TYPES = {
-  berry:   { name: 'Skyberries', icon: 'berry-bush',     item: 'berry',   yield: 2, respawn: 60,  color: '#c96bff' },
-  fiber:   { name: 'Fiber',      icon: 'plant-roots',    item: 'fiber',   yield: 2, respawn: 75,  color: '#7ddc7d' },
-  stone:   { name: 'Stone',      icon: 'stone-block',    item: 'stone',   yield: 2, respawn: 75,  color: '#c9c2b2' },
-  ore:     { name: 'Iron ore',   icon: 'ore',            item: 'ore',     yield: 2, respawn: 120, color: '#ff9d6b' },
-  crystal: { name: 'Sky crystal',icon: 'crystal-growth', item: 'crystal', yield: 2, respawn: 150, color: '#6be2ff' },
+// Cliff rock types. Higher tiers need better climbing gear.
+const CLIFF_TYPES = {
+  granite:   { name: 'Granite',    tier: 1, color: '#332c40', shade: '#2a2435', lip: '#5d7a52', lip2: '#7c9c66' },
+  basalt:    { name: 'Basalt',     tier: 2, color: '#20303c', shade: '#1a2731', lip: '#476b74', lip2: '#639099' },
+  stormrock: { name: 'Storm rock', tier: 3, color: '#3b2a4e', shade: '#301f42', lip: '#7a5f9e', lip2: '#9b7fc4' },
 };
 
-const NODES = [
-  // Haven Rock (Band 0)
-  { type: 'berry', x: 550,  y: 2500 },
-  { type: 'stone', x: 700,  y: 2500 },
-  { type: 'stone', x: 470,  y: 2500 },
-  { type: 'fiber', x: 810,  y: 2400, wall: true },
-  { type: 'fiber', x: 810,  y: 2180, wall: true },
-  { type: 'stone', x: 810,  y: 2260, wall: true },
-  { type: 'berry', x: 950,  y: 2100 },
-  // Skyshard Spire (Band 1)
-  { type: 'berry', x: 1540, y: 2350 },
-  { type: 'ore',   x: 1440, y: 2500, wall: true },
-  { type: 'ore',   x: 1640, y: 2240, wall: true },
-  { type: 'ore',   x: 1640, y: 2140, wall: true },
-  { type: 'crystal', x: 1640, y: 1985, wall: true },
-  { type: 'crystal', x: 1640, y: 1880, wall: true },
-  { type: 'crystal', x: 1750, y: 1750 },
-  // The Needle
-  { type: 'ore',     x: 1790, y: 1500, wall: true },
-  { type: 'crystal', x: 1790, y: 1150, wall: true },
-  { type: 'crystal', x: 1830, y: 850 },
-].map(n => ({ ...n, depletedUntil: 0 }));
+function gloveTier() { return flags.magnets ? 3 : flags.spikes ? 2 : 1; }
 
-const CAMP = { x: 300, y: 2500 };
+// ---------- world generation ----------
+
+const NODE_TYPES = {
+  berry:   { name: 'Skyberries',  icon: 'berry-bush',     item: 'berry',   yield: 2, respawn: 60,  color: '#c96bff' },
+  fiber:   { name: 'Fiber',       icon: 'plant-roots',    item: 'fiber',   yield: 2, respawn: 75,  color: '#7ddc7d' },
+  stone:   { name: 'Stone',       icon: 'stone-block',    item: 'stone',   yield: 2, respawn: 75,  color: '#c9c2b2' },
+  ore:     { name: 'Iron ore',    icon: 'ore',            item: 'ore',     yield: 2, respawn: 120, color: '#ff9d6b' },
+  crystal: { name: 'Sky crystal', icon: 'crystal-growth', item: 'crystal', yield: 2, respawn: 150, color: '#6be2ff' },
+};
+
+const WORLD = { left: 20, right: 4000, top: 300, cloudSea: 2880, kill: 2960 };
+
+let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [];
+let CAMP = { x: 300, y: 2500 };
+let worldSeed = 0;
+
+function generateWorld(seed) {
+  worldSeed = seed;
+  const rnd = mulberry32(seed);
+  const R = (a, b) => a + rnd() * (b - a);
+  const RI = (a, b) => Math.floor(R(a, b + 1));
+
+  rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = [];
+
+  const addCliff = (x, y, w, h, type, taper) => {
+    const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type, taper: taper || 0 };
+    rocks.push(r);
+    return r;
+  };
+  const addNode = (type, x, y, wall) =>
+    NODES.push({ type, x: Math.round(x), y: Math.round(y), wall: !!wall, depletedUntil: 0 });
+  const faceNode = (type, r) =>
+    addNode(type, R(r.x + 22, r.x + r.w - 22), R(r.y + 40, r.y + r.h - 30), true);
+  const addLizard = (r) => {
+    const x = R(r.x + 20, r.x + r.w - 20), y = R(r.y + 30, r.y + r.h - 20);
+    lizards.push({ r, x, y, tx: x, ty: y, t: R(0, 2), dir: 1 });
+  };
+  const ledgeOn = (r) => {
+    // a small standable shelf overlapping the face
+    const w = R(44, 74);
+    return addCliff(R(r.x - 20, r.x + r.w - w + 20), R(r.y + 70, r.y + r.h - 60), w, 16, r.type, 0);
+  };
+
+  // --- start island: safe granite, several practice cliffs ---
+  const groundY = 2500;
+  const startW = R(680, 880);
+  const sx = R(120, 260);
+  const slab0 = addCliff(sx, groundY, startW, 300, 'granite', 170);
+  CAMP = { x: sx + R(80, 140), y: groundY };
+
+  addNode('berry', CAMP.x + R(120, 200), groundY);
+  addNode('stone', sx + startW * R(0.45, 0.6), groundY);
+  addNode('fiber', sx + startW * R(0.3, 0.42), groundY);
+
+  const nTowers = RI(2, 3);
+  let launch = { x: CAMP.x, top: groundY };
+  for (let i = 0; i < nTowers; i++) {
+    const tw = R(110, 190);
+    const th = R(240, 420);
+    const tx = sx + startW * (0.35 + 0.62 * (i / nTowers)) + R(-25, 25);
+    const t = addCliff(tx, groundY - th, tw, th, 'granite', 0);
+    ledgeOn(t);
+    faceNode(rnd() < 0.55 ? 'fiber' : 'stone', t);
+    faceNode(rnd() < 0.55 ? 'stone' : 'fiber', t);
+    if (rnd() < 0.5) addNode('berry', t.x + t.w * R(0.2, 0.8), t.y);
+    addLizard(t);
+    if (t.y < launch.top) launch = { x: t.x + t.w / 2, top: t.y, right: t.x + t.w };
+  }
+
+  // --- chain of islands climbing away from the start ---
+  const bandTypes = ['granite', 'granite', 'basalt', 'basalt', 'stormrock'];
+  let dir = 1;
+  let prevRight = sx + startW;
+  let prevLeft = sx;
+  let graniteCrystals = 0, graniteOre = 0;
+
+  for (let i = 0; i < bandTypes.length; i++) {
+    const type = bandTypes[i];
+    const gap = R(240, 400);
+    const slabW = R(280, 470);
+    const slabTop = clamp(launch.top + R(140, 250), WORLD.top + 700, 2650);
+    let x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW;
+    if (x < 80 || x + slabW > WORLD.right - 120) { dir = -dir; x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW; }
+    const slab = addCliff(x, slabTop, slabW, Math.min(R(240, 380), WORLD.cloudSea - 90 - slabTop), type, R(120, 180));
+
+    const tw = R(110, 190);
+    const th = R(320, 520);
+    const tx = dir > 0 ? x + slabW - tw - R(0, 40) : x + R(0, 40);
+    const tower = addCliff(tx, slabTop - th, tw, th, type, 0);
+    ledgeOn(tower);
+    if (rnd() < 0.6) ledgeOn(slab);
+
+    // resources by band
+    addNode('berry', x + slabW * R(0.2, 0.8), slabTop);
+    if (type === 'granite') {
+      faceNode('ore', tower); faceNode('ore', slab); graniteOre += 2;
+      faceNode(rnd() < 0.5 ? 'fiber' : 'stone', tower);
+      if (graniteCrystals < 2) { faceNode('crystal', tower); graniteCrystals++; }
+    } else if (type === 'basalt') {
+      faceNode('crystal', tower); faceNode('crystal', tower);
+      faceNode('ore', slab);
+      faceNode(rnd() < 0.5 ? 'stone' : 'fiber', slab);
+    } else {
+      faceNode('crystal', tower); faceNode('crystal', tower); faceNode('crystal', slab);
+      faceNode('ore', tower);
+    }
+
+    // threats
+    if (i >= 1 && rnd() < 0.75) {
+      const nx = R(tower.x + 25, tower.x + tower.w - 25), ny = R(tower.y + 80, tower.y + th * 0.6);
+      stingwings.push({ nest: { x: nx, y: ny }, x: nx, y: ny, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0 });
+    }
+    if (rnd() < 0.8) {
+      const gx0 = dir > 0 ? prevRight + 20 : x + slabW + 20;
+      const gx1 = dir > 0 ? x - 20 : prevLeft - 20;
+      if (gx1 - gx0 > 140) {
+        const py = slabTop - R(40, 160);
+        razorbeaks.push({ anchor: { y: py, x0: gx0, x1: gx1 }, x: (gx0 + gx1) / 2, y: py, dir: 1, mode: 'patrol', vx: 0, vy: 0, cd: 0, t: R(0, 6) });
+      }
+    }
+    addLizard(tower);
+    if (rnd() < 0.6) addLizard(slab);
+
+    prevRight = Math.max(prevRight, x + slabW);
+    prevLeft = Math.min(prevLeft, x);
+    launch = { x: tower.x + tower.w / 2, top: tower.y };
+    if (rnd() < 0.35) dir = -dir;
+  }
+
+  // guarantee the early chain can feed the recipes even on a stingy roll
+  if (graniteOre < 4) {
+    const gr = rocks.find(r => r.type === 'granite' && r.h > 200);
+    faceNode('ore', gr); faceNode('ore', gr);
+  }
+
+  // --- the summit spike: one long storm-rock push on the last island ---
+  const lastTower = rocks[rocks.length - 1].type ? rocks.filter(r => r.h > 200).pop() : null;
+  const spikeH = R(650, 850);
+  const spike = addCliff(launch.x - R(24, 40), launch.top - spikeH, R(52, 72), spikeH, 'stormrock', 0);
+  addNode('crystal', spike.x + spike.w / 2, spike.y);
+  faceNode('crystal', spike);
+  addLizard(spike);
+
+  WORLD.top = Math.min(...rocks.map(r => r.y)) - 500;
+  void lastTower;
+}
 
 // ---------- items & recipes ----------
 
@@ -122,14 +246,16 @@ const ITEMS = {
 };
 
 const RECIPES = [
-  { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',         cost: { berry: 2 },            desc: 'Dense food. +35 food when eaten.' },
-  { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',  cost: { fiber: 4, stone: 2 },  desc: 'Hold Jump in the air to glide.', flag: 'glider', once: true },
-  { id: 'battery1', tier: 'personal', name: 'Glove battery Mk1', icon: 'battery-pack', cost: { ore: 2, crystal: 2 },  desc: 'Max glove energy 100 → 150.', flag: 'battery1', once: true },
-  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',        cost: { stone: 6, fiber: 4 },  desc: 'Place on ground or bolt to a cliff. Storage, fast recharge, respawn.' },
-  { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',        cost: { ore: 3, crystal: 2 },  desc: 'Unlocks heavy fabrication at this base.' },
-  { id: 'battery2', tier: 'mk2',      name: 'Glove battery Mk2', icon: 'battery-pack', cost: { ore: 4, crystal: 4 },  desc: 'Max glove energy → 220. Needs Mk1.', flag: 'battery2', once: true, needs: 'battery1' },
-  { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'hang-glider',  cost: {},                      desc: 'Ride rising air. Coming in v0.3.', locked: true },
-  { id: 'grapplebolt', tier: 'mk2',   name: 'Grapple bolt',      icon: 'grapple',      cost: {},                      desc: 'Instant mid-air wall attach. Coming in v0.3.', locked: true },
+  { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },           desc: 'Dense food. +35 food when eaten.' },
+  { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 }, desc: 'Hold Jump in the air to glide.', flag: 'glider', once: true },
+  { id: 'pulse',    tier: 'personal', name: 'Glove pulse',       icon: 'spiky-explosion', cost: { crystal: 1, ore: 1 }, desc: 'Tap the hand near a creature: magnetic burst drives it off. Costs energy.', flag: 'pulse', once: true },
+  { id: 'battery1', tier: 'personal', name: 'Glove battery Mk1', icon: 'battery-pack',    cost: { ore: 2, crystal: 2 }, desc: 'Max glove energy 100 → 150.', flag: 'battery1', once: true },
+  { id: 'spikes',   tier: 'personal', name: 'Grip spikes',       icon: 'spikes',          cost: { ore: 3, stone: 2 },   desc: 'Bite into slick basalt faces.', flag: 'spikes', once: true },
+  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',           cost: { stone: 6, fiber: 4 }, desc: 'Place on ground or bolt to a cliff. Storage, fast recharge, respawn.' },
+  { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 }, desc: 'Unlocks heavy fabrication at this base.' },
+  { id: 'battery2', tier: 'mk2',      name: 'Glove battery Mk2', icon: 'battery-pack',    cost: { ore: 4, crystal: 4 }, desc: 'Max glove energy → 220. Needs Mk1.', flag: 'battery2', once: true, needs: 'battery1' },
+  { id: 'magnets',  tier: 'mk2',      name: 'Resonant magnets',  icon: 'magnet',          cost: { ore: 2, crystal: 5 }, desc: 'Grip charged storm rock. Needs Grip spikes.', flag: 'magnets', once: true, needs: 'spikes' },
+  { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'hang-glider',     cost: {},                     desc: 'Ride rising air. Coming in v0.4.', locked: true },
 ];
 
 // ---------- state ----------
@@ -137,74 +263,54 @@ const RECIPES = [
 const P_W = 26, P_H = 46;
 
 const player = {
-  x: CAMP.x - P_W / 2, y: CAMP.y - P_H, vx: 0, vy: 0,
+  x: 0, y: 0, vx: 0, vy: 0,
   state: 'air', // ground | air | climb | glide
   faceDir: 1,
-  climbRect: null, climbSide: 'L',
+  climbRect: null,
   detachTimer: 0, invuln: 0,
   hp: 100, food: 100, energy: 100, maxEnergy: 100,
-  harvest: null, // {node, t}
-  lowWarned: false,
+  harvest: null,
 };
 
 const inv = { berry: 0, ration: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, basekit: 0 };
-const flags = { glider: false, battery1: false, battery2: false, summit: false };
-const bases = [];   // {x, y, mk2, wall, side, store:{}, deck:rect}
-const caches = [];  // {x, y, items:{}} — dropped on death, climb back for them
+const flags = { glider: false, pulse: false, battery1: false, battery2: false, spikes: false, magnets: false };
+const bases = [];   // {x, y, mk2, wall, store:{}, deck:rect}
+const caches = [];  // {x, y, items:{}}
 let paused = false;
 let gameTime = 0;
+let pulseFx = null; // {x, y, t}
 
-const stingwings = [
-  { nest: { x: 1628, y: 2020 }, x: 1628, y: 2020, mode: 'idle', t: 0, hitCd: 0 },
-];
-const razorbeaks = [
-  { anchor: { y: 2180, x0: 1120, x1: 1480 }, x: 1300, y: 2180, dir: 1, mode: 'patrol', vx: 95, vy: 0, cd: 0, t: 0 },
-];
-
-const clouds = [];
-for (let i = 0; i < 26; i++) {
-  clouds.push({
-    x: Math.random() * 2600 - 100,
-    y: 600 + Math.random() * 2100,
-    s: 60 + Math.random() * 160,
-    v: 4 + Math.random() * 14,
-    a: 0.06 + Math.random() * 0.14,
-    layer: Math.random() < 0.5 ? 0 : 1,
-  });
+let clouds = [];
+function initClouds() {
+  clouds = [];
+  for (let i = 0; i < 30; i++) {
+    clouds.push({
+      x: Math.random() * (WORLD.right + 400) - 200,
+      y: WORLD.top + 200 + Math.random() * (WORLD.cloudSea - WORLD.top - 400),
+      s: 60 + Math.random() * 160,
+      v: 4 + Math.random() * 14,
+      a: 0.06 + Math.random() * 0.14,
+      layer: Math.random() < 0.5 ? 0 : 1,
+    });
+  }
 }
-
-// ---------- goals ----------
-
-const GOALS = [
-  { text: 'Harvest fiber and stone from the practice cliff — walk into the wall to climb, hold the claw button near a glowing node.', done: () => flags.glider || (inv.fiber >= 4 && inv.stone >= 2) },
-  { text: 'Open your Pack and fabricate the Glider.', done: () => flags.glider },
-  { text: 'Climb to the cliff top, jump east and hold Jump to glide to Skyshard Spire.', done: () => player.x > 1400 },
-  { text: 'Harvest iron ore and sky crystal from the spire face. Watch the sky.', done: () => flags.battery1 || (inv.ore >= 2 && inv.crystal >= 2) },
-  { text: 'Fabricate the Glove battery Mk1.', done: () => flags.battery1 },
-  { text: 'Craft a Base kit, place a base near the spire, and build the Fabricator Mk2.', done: () => bases.some(b => b.mk2) },
-  { text: 'Fabricate the Glove battery Mk2, then climb The Needle in one push.', done: () => flags.summit },
-  { text: 'Bolt a base to The Needle mid-climb — open your Pack while gripping the wall and place a Base kit.', done: () => bases.some(b => b.wall) },
-  { text: 'Summit reached, cliff base standing. The Shear opens in v0.3 — thanks for playtesting.', done: () => false },
-];
 
 // ---------- input ----------
 
 // Suppress browser touch gestures: pinch zoom, double-tap zoom, long-press menus.
-// (The viewport meta asks for no zoom too, but iOS Safari ignores user-scalable=no.)
 document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('gesturechange', e => e.preventDefault());
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 document.addEventListener('contextmenu', e => e.preventDefault());
 let lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
-  // buttons rely on the synthetic click and are covered by touch-action: manipulation
   if (e.target.closest && e.target.closest('button, a')) return;
   const now = Date.now();
   if (now - lastTouchEnd < 350 && e.cancelable) e.preventDefault();
   lastTouchEnd = now;
 }, { passive: false });
 
-const input = { x: 0, y: 0, jumpHeld: false, jumpPressed: false, interactHeld: false };
+const input = { x: 0, y: 0, jumpHeld: false, jumpPressed: false, interactHeld: false, interactPressed: false };
 const btnState = { jump: false, interact: false };
 const keys = {};
 const joy = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
@@ -250,6 +356,7 @@ function bindHold(el, prop) {
     el.setPointerCapture(e.pointerId);
     el.classList.add('held');
     if (prop === 'jump') input.jumpPressed = true;
+    if (prop === 'interact') input.interactPressed = true;
     btnState[prop] = true;
   });
   const up = () => { el.classList.remove('held'); btnState[prop] = false; };
@@ -265,6 +372,7 @@ window.addEventListener('keydown', e => {
   if (e.repeat) return;
   keys[e.code] = true;
   if (e.code === 'Space') { input.jumpPressed = true; e.preventDefault(); }
+  if (e.code === 'KeyE') input.interactPressed = true;
   if (e.code === 'KeyC') togglePack();
   if (e.code === 'Escape') closeOverlays();
 });
@@ -286,66 +394,61 @@ function pollInput() {
 
 // ---------- physics ----------
 
-function solids() { return ROCKS.filter(r => r.kind !== 'perch'); }
-
-let touchingWall = null; // {rect, side} refreshed by moveX
-
-function moveX(dx) {
-  touchingWall = null;
-  player.x += dx;
-  for (const r of solids()) {
-    if (player.x + P_W > r.x && player.x < r.x + r.w &&
-        player.y + P_H > r.y && player.y < r.y + r.h) {
-      if (dx > 0) { player.x = r.x - P_W; touchingWall = { rect: r, side: 'L' }; }
-      else if (dx < 0) { player.x = r.x + r.w; touchingWall = { rect: r, side: 'R' }; }
-      player.vx = 0;
-    }
-  }
-  player.x = clamp(player.x, WORLD.left, WORLD.right - P_W);
-}
-
-function moveY(dy) {
-  const wasBottom = player.y + P_H;
-  player.y += dy;
-  let landed = false;
-  for (const r of ROCKS) {
-    const overlapX = player.x + P_W > r.x && player.x < r.x + r.w;
-    if (!overlapX) continue;
-    if (r.kind === 'perch') {
-      // one-way: only catch when falling and feet were above the top
-      if (dy > 0 && wasBottom <= r.y + 1 && player.y + P_H > r.y) {
-        player.y = r.y - P_H; landed = true; player.vy = 0;
-      }
-      continue;
-    }
-    if (player.y + P_H > r.y && player.y < r.y + r.h) {
-      if (dy > 0) { player.y = r.y - P_H; landed = true; }
-      else if (dy < 0) { player.y = r.y + r.h; }
-      player.vy = 0;
-    }
-  }
-  return landed;
-}
-
 function standingOn() {
-  for (const r of ROCKS) {
+  for (const r of rocks) {
     const overlapX = player.x + P_W > r.x && player.x < r.x + r.w;
     if (overlapX && Math.abs(player.y + P_H - r.y) < 2) return r;
   }
   return null;
 }
 
-function tryAttach(wall) {
-  if (!wall || player.energy <= 3 || player.detachTimer > 0) return false;
-  player.state = 'climb';
-  player.climbRect = wall.rect;
-  player.climbSide = wall.side;
-  player.vx = 0; player.vy = 0;
-  player.x = wall.side === 'L' ? wall.rect.x - P_W : wall.rect.x + wall.rect.w;
-  if (!flags._climbTipShown) {
-    flags._climbTipShown = true;
-    toast('Magnetic gloves engaged — climbing drains energy', 'good', 'gloves');
+function moveY(dy) {
+  const wasBottom = player.y + P_H;
+  player.y += dy;
+  let landed = false;
+  if (dy > 0) {
+    for (const r of rocks) {
+      const overlapX = player.x + P_W > r.x && player.x < r.x + r.w;
+      if (overlapX && wasBottom <= r.y + 1 && player.y + P_H > r.y) {
+        player.y = r.y - P_H; landed = true; player.vy = 0;
+      }
+    }
   }
+  return landed;
+}
+
+// The climbable face under a world point — biggest rect wins, so a shelf
+// overlapping a tower never steals the grab.
+function faceAt(px, py) {
+  let best = null, ba = 0;
+  for (const r of rocks) {
+    if (r.deck) continue;
+    if (px < r.x || px > r.x + r.w || py < r.y || py > r.y + r.h) continue;
+    const a = r.w * r.h;
+    if (a > ba) { ba = a; best = r; }
+  }
+  return best;
+}
+
+function canClimb(r) { return CLIFF_TYPES[r.type].tier <= gloveTier(); }
+
+let slickToastAt = -99;
+function slickFeedback(r) {
+  if (gameTime - slickToastAt < 6) return;
+  slickToastAt = gameTime;
+  const def = CLIFF_TYPES[r.type];
+  toast(def.name + ' — needs ' + (def.tier === 2 ? 'Grip spikes' : 'Resonant magnets'), 'bad',
+    def.tier === 2 ? 'spikes' : 'magnet');
+}
+
+function tryGrab() {
+  if (player.energy <= 3 || player.detachTimer > 0) return false;
+  const r = faceAt(player.x + P_W / 2, player.y + P_H / 2);
+  if (!r) return false;
+  if (!canClimb(r)) { slickFeedback(r); return false; }
+  player.state = 'climb';
+  player.climbRect = r;
+  player.vx = 0; player.vy = 0;
   return true;
 }
 
@@ -356,11 +459,19 @@ function detach(push) {
 }
 
 function nearCampOrBase() {
-  if (dist(player.x + P_W / 2, player.y + P_H / 2, CAMP.x, CAMP.y) < T.campRadius) return CAMP;
-  for (const b of bases) {
-    if (dist(player.x + P_W / 2, player.y + P_H / 2, b.x, b.y) < T.campRadius) return b;
-  }
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  if (dist(px, py, CAMP.x, CAMP.y) < T.campRadius) return CAMP;
+  for (const b of bases) if (dist(px, py, b.x, b.y) < T.campRadius) return b;
   return null;
+}
+
+let lastSafe = null; // set after world gen
+
+// A wall base is anchored at the rock face; you stand on its deck.
+const DECK_W = 78, DECK_H = 12;
+function standPos(place) {
+  if (!place.wall) return { x: place.x, y: place.y };
+  return { x: place.x, y: place.y - DECK_H };
 }
 
 function updatePlayer(dt) {
@@ -370,53 +481,29 @@ function updatePlayer(dt) {
 
   if (player.state === 'climb') {
     const r = player.climbRect;
-    // step off onto an adjacent perch when pushing away from the wall
-    const away = player.climbSide === 'L' ? -1 : 1;
-    if (input.x * away > 0.4) {
-      const feet = player.y + P_H;
-      for (const p of ROCKS) {
-        if (p.kind !== 'perch') continue;
-        const nearFace = player.climbSide === 'L' ? Math.abs(p.x + p.w - r.x) < 8 : Math.abs(p.x - (r.x + r.w)) < 8;
-        if (nearFace && Math.abs(feet - p.y) < 30) {
-          player.x = clamp(p.x + p.w / 2 - P_W / 2, p.x - 4, p.x + p.w - P_W + 4);
-          player.y = p.y - P_H;
-          player.state = 'ground'; player.climbRect = null;
-          return;
-        }
-      }
-    }
-
-    let vy = input.y * T.climbSpeed;
-    const moving = Math.abs(input.y) > 0.1;
-    player.energy -= (moving ? T.climbDrainMove * Math.abs(input.y) : T.climbDrainIdle) * dt;
-
-    if (player.energy < 25 && !player.lowWarned) {
-      player.lowWarned = true;
-      toast('Grip failing — find a ledge!', 'bad', 'power-lightning');
-    }
-    if (player.energy <= 0) {
-      player.energy = 0;
-      toast('Gloves dead — falling!', 'bad', 'power-lightning');
-      detach(false);
-      return;
-    }
+    const movingMag = Math.hypot(input.x, input.y);
+    player.energy -= (movingMag > 0.1 ? T.climbDrainMove * Math.min(movingMag, 1) : T.climbDrainIdle) * dt;
+    if (player.energy <= 0) { player.energy = 0; detach(false); return; }
 
     // mantle over the top
-    if (input.y < -0.1 && player.y + P_H + vy * dt <= r.y + 10) {
+    if (input.y < -0.1 && player.y + P_H + input.y * T.climbSpeed * dt <= r.y + 10) {
       player.y = r.y - P_H;
-      player.x = player.climbSide === 'L' ? r.x + 4 : r.x + r.w - P_W - 4;
       player.state = 'ground'; player.climbRect = null;
       player.vy = 0;
       return;
     }
-    const landed = moveY(vy * dt);
+
+    player.x += input.x * T.climbSpeedX * dt;
+    const cx = player.x + P_W / 2;
+    if (cx < r.x - 4 || cx > r.x + r.w + 4) { detach(false); return; } // slid off the side
+
+    const landed = moveY(input.y * T.climbSpeed * dt);
     if (landed) { player.state = 'ground'; player.climbRect = null; return; }
-    // slid off the bottom of the face
-    if (player.y > r.y + r.h) { detach(false); return; }
+    if (player.y > r.y + r.h) { detach(false); return; } // off the bottom
 
     if (input.jumpPressed) {
       detach(true);
-      player.vx = away * 240;
+      player.vx = input.x * 260;
       player.vy = -380;
       return;
     }
@@ -428,9 +515,21 @@ function updatePlayer(dt) {
 
   if (grounded) {
     player.vx = input.x * T.walkSpeed;
-    player.lowWarned = false;
     if (input.jumpPressed) { player.vy = -T.jumpVel; player.state = 'air'; }
-    else if (!standingOn()) player.state = 'air';
+    else if (input.y < -0.5 && tryGrab()) return; // grab a face you're standing in front of
+    else if (input.y > 0.6) {
+      // climb down the face of whatever you're standing on
+      const on = standingOn();
+      if (on && !on.deck && on.h > 60 && canClimb(on)) {
+        player.y = on.y - P_H + 12;
+        player.state = 'climb';
+        player.climbRect = on;
+        player.vx = 0; player.vy = 0;
+        return;
+      }
+      if (on && !on.deck && on.h > 60 && !canClimb(on)) slickFeedback(on);
+    }
+    if (player.state === 'ground' && !standingOn()) player.state = 'air';
   } else {
     // air control
     player.vx += input.x * 900 * dt;
@@ -449,31 +548,21 @@ function updatePlayer(dt) {
         player.vy = Math.min(player.vy, T.glideFall + 120);
       }
     }
+    // reach up to grab a face while falling or gliding past it
+    if (input.y < -0.4 && tryGrab()) return;
   }
 
   const impactVy = player.vy;
-  moveX(player.vx * dt);
-
-  // magnetic auto-attach on wall contact (airborne), or push into a wall from the ground
-  if (touchingWall) {
-    const towardWall = (touchingWall.side === 'L' && input.x > 0.2) || (touchingWall.side === 'R' && input.x < -0.2);
-    if ((player.state === 'air' || player.state === 'glide') && (towardWall || player.detachTimer <= 0)) {
-      if (tryAttach(touchingWall)) return;
-    } else if (grounded && towardWall) {
-      if (tryAttach(touchingWall)) return;
-    }
-  }
+  player.x = clamp(player.x + player.vx * dt, WORLD.left, WORLD.right - P_W);
 
   const landed = moveY(player.vy * dt);
   if (landed && player.state !== 'ground') {
     player.state = 'ground';
     if (impactVy > T.fallSafeVel) {
-      const dmg = (impactVy - T.fallSafeVel) * T.fallDmgScale;
-      hurt(dmg, 'The rock is unforgiving');
+      hurt((impactVy - T.fallSafeVel) * T.fallDmgScale, 'The rock is unforgiving');
     }
   }
 
-  // energy regen on the ground
   if (player.state === 'ground') {
     const zone = nearCampOrBase();
     player.energy += (zone ? T.regenCamp : T.regenGround) * dt;
@@ -506,19 +595,6 @@ function die(cause) {
   saveGame();
 }
 
-// You wake at the last safe place you actually stood. Deaths are usually long falls,
-// so "nearest to the corpse" would drag you back down past every base you built.
-let lastSafe = CAMP;
-
-// A wall base is anchored at the rock face, so you stand on its deck, not inside the cliff.
-function standPos(place) {
-  if (!place.wall) return { x: place.x, y: place.y };
-  return {
-    x: place.side === 'L' ? place.x - DECK_W / 2 : place.x + DECK_W / 2,
-    y: place.y - DECK_H,
-  };
-}
-
 function dropCache(x, y) {
   const items = {};
   let any = false;
@@ -526,7 +602,6 @@ function dropCache(x, y) {
     if (inv[id] > 0) { items[id] = inv[id]; inv[id] = 0; any = true; }
   }
   if (!any) return false;
-  // Keep the cache retrievable: never let it sink into the cloud sea.
   caches.push({ x: clamp(x, WORLD.left, WORLD.right), y: Math.min(y, WORLD.cloudSea - 140), items });
   while (caches.length > 3) caches.shift();
   return true;
@@ -537,7 +612,7 @@ function respawn() {
   player.hp = 100;
   player.food = Math.max(50, player.food);
   player.energy = player.maxEnergy;
-  const sp = standPos(lastSafe);
+  const sp = standPos(lastSafe || CAMP);
   player.x = sp.x - P_W / 2;
   player.y = sp.y - P_H - 2;
   player.vx = 0; player.vy = 0;
@@ -567,13 +642,13 @@ function updateVitals(dt) {
   if (player.y > WORLD.kill) die('You fell into the cloud sea');
 }
 
-function hurtStarve(dmg) { // starvation ignores the invuln window
+function hurtStarve(dmg) {
   if (deathCause) return;
   player.hp -= dmg;
   if (player.hp <= 0) die('Starved in the high air');
 }
 
-// ---------- harvesting & interaction ----------
+// ---------- harvesting, pulse & interaction ----------
 
 function nearestNode() {
   const px = player.x + P_W / 2, py = player.y + P_H / 2;
@@ -592,8 +667,31 @@ function nearestBase() {
   return null;
 }
 
+function threatInRange(radius) {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  for (const w of stingwings) if (dist(px, py, w.x, w.y) < radius) return true;
+  for (const b of razorbeaks) if (dist(px, py, b.x, b.y) < radius) return true;
+  return false;
+}
+
+function firePulse() {
+  if (player.energy < T.pulseCost) return;
+  player.energy -= T.pulseCost;
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  pulseFx = { x: px, y: py, t: 0 };
+  for (const w of stingwings) {
+    if (dist(px, py, w.x, w.y) < T.pulseRadius) { w.stun = 4; w.mode = 'return'; w.hitCd = 1.5; }
+  }
+  for (const b of razorbeaks) {
+    if (dist(px, py, b.x, b.y) < T.pulseRadius) { b.mode = 'rise'; b.cd = 5; }
+  }
+}
+
 function updateInteraction(dt) {
   const node = nearestNode();
+
+  // a tap of the hand doubles as the pulse when something is on you
+  if (input.interactPressed && flags.pulse && threatInRange(T.pulseRadius)) firePulse();
 
   if (input.interactHeld && node) {
     if (!player.harvest || player.harvest.node !== node) player.harvest = { node, t: 0 };
@@ -610,7 +708,6 @@ function updateInteraction(dt) {
       saveGame();
     }
   } else {
-    // keyboard fallback: E opens a base when no node competes for the button
     if (input.interactHeld && !node) {
       const b = nearestBase();
       if (b && !player._baseTapLatch) { player._baseTapLatch = true; openBase(b); }
@@ -619,13 +716,10 @@ function updateInteraction(dt) {
   }
   if (!input.interactHeld) player._baseTapLatch = false;
 
-  // interact button feedback
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
   const prog = player.harvest ? player.harvest.t / T.harvestTime : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
   btnInteract.classList.toggle('glide-ready', !!node);
-
-  // a base in reach gets its own button, so standing on a resource never hides your door
   btnBase.classList.toggle('hidden', !nearestBase());
 }
 
@@ -644,6 +738,7 @@ function updateStingwings(dt) {
   const pc = playerCenter();
   for (const w of stingwings) {
     w.t += dt; w.hitCd = Math.max(0, w.hitCd - dt);
+    if (w.stun > 0) { w.stun -= dt; w.y += 20 * dt; continue; }
     const dToPlayer = dist(w.x, w.y, pc.x, pc.y);
     if (w.mode === 'idle') {
       w.x = w.nest.x + Math.sin(w.t * 1.3) * 38;
@@ -658,9 +753,8 @@ function updateStingwings(dt) {
         w.hitCd = 1.2;
         hurt(12, 'Stung out of the sky');
         knockOffWall(pc.x > w.x ? 1 : -1);
-        toast('Stingwing hit!', 'bad', 'wasp-sting');
       }
-    } else { // return
+    } else {
       const ang = Math.atan2(w.nest.y - w.y, w.nest.x - w.x);
       w.x += Math.cos(ang) * 130 * dt;
       w.y += Math.sin(ang) * 130 * dt;
@@ -693,14 +787,40 @@ function updateRazorbeaks(dt) {
       if (dToPlayer < 30) {
         hurt(15, 'Torn from the wind');
         player.vy += 260; player.vx += b.dir * 160;
-        toast('Razorbeak strike!', 'bad', 'vulture');
         b.mode = 'rise'; b.cd = 2.5;
       } else if (b.swoopT > 2.6 || !airborne) { b.mode = 'rise'; b.cd = 1.5; }
-    } else { // rise back to patrol height
+    } else {
       const ang = Math.atan2(b.anchor.y - b.y, (b.anchor.x0 + b.anchor.x1) / 2 - b.x);
       b.x += Math.cos(ang) * 150 * dt;
       b.y += Math.sin(ang) * 150 * dt;
       if (Math.abs(b.y - b.anchor.y) < 20) { b.mode = 'patrol'; b.vx = 0; b.vy = 0; }
+    }
+  }
+}
+
+function updateLizards(dt) {
+  const pc = playerCenter();
+  for (const l of lizards) {
+    l.t -= dt;
+    const dp = dist(l.x, l.y, pc.x, pc.y);
+    if (dp < 70 && l.t < 1.5) {
+      // skitter away across the face
+      const ang = Math.atan2(l.y - pc.y, l.x - pc.x);
+      l.tx = clamp(l.x + Math.cos(ang) * 140, l.r.x + 12, l.r.x + l.r.w - 12);
+      l.ty = clamp(l.y + Math.sin(ang) * 140, l.r.y + 12, l.r.y + l.r.h - 12);
+      l.t = 2.5;
+    } else if (l.t <= 0) {
+      l.tx = l.r.x + 12 + Math.random() * (l.r.w - 24);
+      l.ty = l.r.y + 12 + Math.random() * (l.r.h - 24);
+      l.t = 2 + Math.random() * 4;
+    }
+    const dx = l.tx - l.x, dy = l.ty - l.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 3) {
+      const sp = dp < 90 ? 90 : 38;
+      l.x += dx / d * sp * dt;
+      l.y += dy / d * sp * dt;
+      if (Math.abs(dx) > 2) l.dir = dx > 0 ? 1 : -1;
     }
   }
 }
@@ -726,15 +846,18 @@ function canAfford(recipe) {
 function craft(recipe, base) {
   if (recipe.locked) return;
   if (recipe.once && flags[recipe.flag]) return;
-  if (recipe.needs && !flags[recipe.needs]) { toast('Requires ' + recipe.needs.replace('battery1', 'Glove battery Mk1'), 'bad'); return; }
+  if (recipe.needs && !flags[recipe.needs]) return;
   if (!canAfford(recipe)) { toast('Not enough materials', 'bad'); return; }
   for (const [k, v] of Object.entries(recipe.cost)) inv[k] -= v;
 
-  if (recipe.id === 'ration') { inv.ration += 1; toast('Trail ration fabricated', 'good', 'meat'); }
-  if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated — hold Jump in the air', 'good', 'hang-glider'); }
-  if (recipe.id === 'battery1') { flags.battery1 = true; player.maxEnergy = 150; player.energy = 150; toast('Battery Mk1 — max energy 150', 'good', 'battery-pack'); }
-  if (recipe.id === 'battery2') { flags.battery2 = true; player.maxEnergy = 220; player.energy = 220; toast('Battery Mk2 — max energy 220', 'good', 'battery-pack'); }
-  if (recipe.id === 'basekit') { inv.basekit += 1; toast('Base kit ready — place it from your Pack', 'good', 'house'); }
+  if (recipe.id === 'ration') { inv.ration += 1; toast('Trail ration', 'good', 'meat'); }
+  if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated', 'good', 'hang-glider'); }
+  if (recipe.id === 'pulse') { flags.pulse = true; toast('Glove pulse armed', 'good', 'spiky-explosion'); }
+  if (recipe.id === 'spikes') { flags.spikes = true; toast('Grip spikes fitted', 'good', 'spikes'); }
+  if (recipe.id === 'magnets') { flags.magnets = true; toast('Resonant magnets fitted', 'good', 'magnet'); }
+  if (recipe.id === 'battery1') { flags.battery1 = true; player.maxEnergy = 150; player.energy = 150; toast('Battery Mk1 — 150', 'good', 'battery-pack'); }
+  if (recipe.id === 'battery2') { flags.battery2 = true; player.maxEnergy = 220; player.energy = 220; toast('Battery Mk2 — 220', 'good', 'battery-pack'); }
+  if (recipe.id === 'basekit') { inv.basekit += 1; toast('Base kit ready', 'good', 'house'); }
   if (recipe.id === 'mk2' && base) { base.mk2 = true; toast('Fabricator Mk2 online', 'good', 'anvil'); }
   renderPack();
   if (openBaseRef && !document.getElementById('overlay-base').classList.contains('hidden')) renderBase(openBaseRef);
@@ -749,14 +872,9 @@ function eatItem(id) {
   renderPack();
 }
 
-// Bases go on flat ground or bolt straight onto a cliff face. A wall base extends a
-// deck you can stand on, turning any cliff into a rest stop.
-const DECK_W = 78, DECK_H = 12;
-
 function makeWallDeck(base) {
-  const x = base.side === 'L' ? base.x - DECK_W : base.x;
-  const deck = { x, y: base.y - DECK_H, w: DECK_W, h: DECK_H, kind: 'perch', deck: true };
-  ROCKS.push(deck);
+  const deck = { x: Math.round(base.x - DECK_W / 2), y: Math.round(base.y - DECK_H), w: DECK_W, h: DECK_H, type: 'granite', taper: 0, deck: true };
+  rocks.push(deck);
   base.deck = deck;
   return deck;
 }
@@ -770,14 +888,7 @@ function placeBase() {
   }
   let b;
   if (onWall) {
-    const r = player.climbRect;
-    // anchor at the rock face, deck sticking out on the player's side
-    const side = player.climbSide;
-    b = {
-      x: side === 'L' ? r.x : r.x + r.w,
-      y: player.y + P_H,
-      mk2: false, wall: true, side, store: {},
-    };
+    b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false, wall: true, store: {} };
     makeWallDeck(b);
     bases.push(b);
     lastSafe = b;
@@ -786,12 +897,12 @@ function placeBase() {
     const sp = standPos(b);
     player.x = sp.x - P_W / 2;
     player.y = sp.y - P_H;
-    toast('Base bolted to the cliff — respawn point set', 'good', 'hut');
+    toast('Base bolted to the cliff', 'good', 'hut');
   } else {
     b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false, wall: false, store: {} };
     bases.push(b);
     lastSafe = b;
-    toast('Base placed — respawn point set', 'good', 'house');
+    toast('Base placed', 'good', 'house');
   }
   inv.basekit -= 1;
   closeOverlays();
@@ -799,15 +910,6 @@ function placeBase() {
 }
 
 // ---------- storage ----------
-
-function storeItem(base, id, all) {
-  const n = all ? inv[id] : 1;
-  if (n <= 0) return;
-  inv[id] -= n;
-  base.store[id] = (base.store[id] || 0) + n;
-  renderBase(base);
-  saveGame();
-}
 
 function takeItem(base, id, all) {
   const have = base.store[id] || 0;
@@ -832,23 +934,24 @@ function depositAll(base) {
 
 // ---------- save / load ----------
 
-const SAVE_KEY = 'skyreach.save.v1';
+const SAVE_KEY = 'skyreach.save.v2';
 let saveNoticeUntil = 0;
-let wiping = false; // set during a wipe so the unload autosave can't resurrect the save
+let wiping = false;
 
 function saveGame() {
   if (wiping) return;
   try {
     const data = {
       v: GAME_VERSION,
+      seed: worldSeed,
       gameTime,
       player: {
         x: player.x, y: player.y, hp: player.hp, food: player.food,
         energy: player.energy, maxEnergy: player.maxEnergy,
       },
       inv, flags,
-      bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, wall: !!b.wall, side: b.side, store: b.store || {} })),
-      lastSafe: bases.indexOf(lastSafe), // -1 = the starting camp
+      bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, wall: !!b.wall, store: b.store || {} })),
+      lastSafe: bases.indexOf(lastSafe),
       caches,
       nodes: NODES.map(n => Math.max(0, n.depletedUntil - gameTime)),
     };
@@ -860,8 +963,9 @@ function saveGame() {
 function loadGame() {
   let data;
   try { data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return false; }
-  if (!data || !data.player) return false;
+  if (!data || !data.player || typeof data.seed !== 'number') return false;
 
+  generateWorld(data.seed);
   gameTime = data.gameTime || 0;
   Object.assign(player, data.player);
   player.vx = 0; player.vy = 0; player.state = 'air'; player.climbRect = null; player.harvest = null;
@@ -870,7 +974,7 @@ function loadGame() {
 
   bases.length = 0;
   for (const b of data.bases || []) {
-    const base = { x: b.x, y: b.y, mk2: !!b.mk2, wall: !!b.wall, side: b.side, store: b.store || {} };
+    const base = { x: b.x, y: b.y, mk2: !!b.mk2, wall: !!b.wall, store: b.store || {} };
     if (base.wall) makeWallDeck(base);
     bases.push(base);
   }
@@ -888,7 +992,7 @@ function resetGame() {
   location.reload();
 }
 
-// overlay plumbing
+// ---------- overlays ----------
 
 function anyOverlayOpen() {
   return [...document.querySelectorAll('.overlay')].some(o => !o.classList.contains('hidden'));
@@ -898,7 +1002,7 @@ function openOverlay(id) {
   paused = true;
 }
 function closeOverlays() {
-  if (deathCause) return; // death overlay only closes via respawn
+  if (deathCause) return;
   document.querySelectorAll('.overlay').forEach(o => o.classList.add('hidden'));
   paused = false;
 }
@@ -987,7 +1091,6 @@ function renderBase(base) {
     ? 'Heavy fabrication online. Glove energy recharges fast inside the base perimeter.'
     : 'A powered fabricator needs an anchor point. Build the Mk2 here to unlock heavier gear.';
 
-  // storage
   const store = document.getElementById('base-store');
   store.innerHTML = '';
   const ids = Object.keys(base.store || {}).filter(id => base.store[id] > 0);
@@ -1044,15 +1147,14 @@ document.getElementById('version-badge').addEventListener('click', () => {
 
 document.getElementById('btn-respawn').addEventListener('click', respawn);
 
-// wipe save — two taps, so a stray thumb never nukes a playtest
 const resetBtn = document.getElementById('btn-reset');
 resetBtn.addEventListener('click', () => {
   if (resetBtn.classList.contains('confirm')) { resetGame(); return; }
   resetBtn.classList.add('confirm');
-  resetBtn.textContent = 'Tap again to wipe everything';
+  resetBtn.textContent = 'Tap again — new world, fresh start';
   setTimeout(() => {
     resetBtn.classList.remove('confirm');
-    resetBtn.textContent = 'Wipe save & restart';
+    resetBtn.textContent = 'Wipe save & remix a new world';
   }, 3000);
 });
 
@@ -1065,7 +1167,7 @@ document.querySelector('#version-badge .badge-icon').innerHTML = svgIcon('mounta
 document.getElementById('version-text').textContent = 'v' + GAME_VERSION;
 document.querySelector('#btn-pack .abtn-icon').innerHTML = svgIcon('knapsack');
 document.querySelector('#btn-base .abtn-icon').innerHTML = svgIcon('house');
-document.querySelector('#btn-interact .abtn-icon').innerHTML = svgIcon('grapple');
+document.querySelector('#btn-interact .abtn-icon').innerHTML = svgIcon('hand');
 document.querySelector('#btn-jump .abtn-icon').innerHTML = svgIcon('jump-across');
 document.getElementById('pack-icon').innerHTML = svgIcon('gear-hammer');
 document.getElementById('base-icon').innerHTML = svgIcon('house');
@@ -1079,28 +1181,10 @@ function updateHUD() {
   document.getElementById('bar-food').classList.toggle('warn', player.food < 20);
   document.getElementById('bar-energy').classList.toggle('warn', player.energy < player.maxEnergy * 0.2);
 
-  // jump button doubles as the glide indicator
   const jumpIcon = document.querySelector('#btn-jump .abtn-icon');
-  const gliding = player.state === 'glide' || (flags.glider && (player.state === 'air'));
-  const want = gliding ? 'hang-glider' : 'jump-across';
+  const want = (player.state === 'glide' || (flags.glider && player.state === 'air')) ? 'hang-glider' : 'jump-across';
   if (jumpIcon.dataset.icon !== want) { jumpIcon.dataset.icon = want; jumpIcon.innerHTML = svgIcon(want); }
   btnJump.classList.toggle('glide-ready', player.state === 'glide');
-
-  const goal = GOALS.find(g => !g.done());
-  const gt = document.getElementById('goal-text');
-  if (goal && gt.textContent !== goal.text) gt.textContent = goal.text;
-}
-
-// ---------- goals ----------
-
-function updateGoals() {
-  if (!flags.summit) {
-    const on = standingOn();
-    if (on && on.name === 'The Needle' && player.state === 'ground') {
-      flags.summit = true;
-      toast('The Needle — summit reached', 'good', 'mountain-climbing');
-    }
-  }
 }
 
 // ---------- rendering ----------
@@ -1108,7 +1192,7 @@ function updateGoals() {
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let cw = 0, chh = 0, dpr = 1, scale = 1;
-const cam = { x: CAMP.x, y: CAMP.y - 100 };
+const cam = { x: 300, y: 2400 };
 
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1121,7 +1205,6 @@ window.addEventListener('resize', resize);
 resize();
 
 function skyColor(y) {
-  // deep indigo up high, warm haze near the cloud sea
   const t = clamp((y - 700) / 1900, 0, 1);
   const top = [To(11, 21, 48), To(120, 150, 205)];
   const bot = [To(38, 60, 110), To(215, 190, 170)];
@@ -1132,6 +1215,60 @@ function skyColor(y) {
 
 function w2s(x, y) { return { x: (x - cam.x) * scale + cw / 2, y: (y - cam.y) * scale + chh / 2 }; }
 
+function drawCliff(r) {
+  const def = CLIFF_TYPES[r.type];
+  if (r.deck) {
+    ctx.fillStyle = '#243352';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = '#8fc7ff';
+    ctx.fillRect(r.x, r.y, r.w, 3);
+    ctx.fillStyle = 'rgba(143,199,255,0.35)';
+    for (let i = 8; i < r.w - 4; i += 18) ctx.fillRect(r.x + i, r.y + r.h, 3, 10);
+    return;
+  }
+  ctx.fillStyle = def.color;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  if (r.taper) {
+    ctx.beginPath();
+    ctx.moveTo(r.x, r.y + r.h);
+    ctx.lineTo(r.x + r.w, r.y + r.h);
+    ctx.lineTo(r.x + r.w * 0.62, r.y + r.h + r.taper);
+    ctx.lineTo(r.x + r.w * 0.3, r.y + r.h + r.taper * 0.7);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // simple face texture per type, deterministic per rect
+  ctx.fillStyle = def.shade;
+  if (r.type === 'basalt') {
+    for (let i = 0; i < r.w; i += 26) ctx.fillRect(r.x + i + (r.y % 13), r.y + 6, 3, r.h - 12);
+  } else if (r.type === 'stormrock') {
+    for (let i = 0; i < 8; i++) {
+      const fx = r.x + ((r.x * 7 + i * 131) % Math.max(r.w - 10, 1));
+      const fy = r.y + ((r.y * 3 + i * 197) % Math.max(r.h - 10, 1));
+      ctx.fillRect(fx, fy, 4, 4);
+    }
+    ctx.fillStyle = 'rgba(155,127,196,0.35)';
+    for (let i = 0; i < 4; i++) {
+      const fx = r.x + ((r.x * 11 + i * 89) % Math.max(r.w - 8, 1));
+      const fy = r.y + ((r.y * 5 + i * 241) % Math.max(r.h - 8, 1));
+      ctx.fillRect(fx, fy, 3, 3);
+    }
+  } else {
+    for (let i = 0; i < 6; i++) {
+      const fx = r.x + ((r.x * 13 + i * 103) % Math.max(r.w - 14, 1));
+      const fy = r.y + ((r.y * 7 + i * 167) % Math.max(r.h - 14, 1));
+      ctx.fillRect(fx, fy, 8, 3);
+    }
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(r.x, r.y, 5, r.h);
+  // top lip
+  ctx.fillStyle = def.lip;
+  ctx.fillRect(r.x - 3, r.y, r.w + 6, 9);
+  ctx.fillStyle = def.lip2;
+  ctx.fillRect(r.x - 3, r.y, r.w + 6, 4);
+}
+
 function render() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -1141,7 +1278,6 @@ function render() {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, cw, chh);
 
-  // stars up high
   if (cam.y < 1500) {
     const a = clamp((1500 - cam.y) / 900, 0, 0.8);
     ctx.fillStyle = 'rgba(255,255,255,' + a + ')';
@@ -1157,46 +1293,9 @@ function render() {
   ctx.scale(scale, scale);
   ctx.translate(-cam.x, -cam.y);
 
-  // far clouds
   for (const c of clouds) if (c.layer === 0) drawIcon(ctx, 'fluffy-cloud', c.x, c.y, c.s, '#ffffff', c.a);
 
-  // rocks
-  for (const r of ROCKS) {
-    if (r.kind === 'perch') {
-      if (r.deck) { // built decking, not rock
-        ctx.fillStyle = '#243352';
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.fillStyle = '#8fc7ff';
-        ctx.fillRect(r.x, r.y, r.w, 3);
-        ctx.fillStyle = 'rgba(143,199,255,0.35)';
-        for (let i = 8; i < r.w - 4; i += 18) ctx.fillRect(r.x + i, r.y + r.h, 3, 10);
-        continue;
-      }
-      ctx.fillStyle = '#3a3348';
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.fillStyle = '#5d7a52';
-      ctx.fillRect(r.x, r.y, r.w, 6);
-      continue;
-    }
-    ctx.fillStyle = '#332c40';
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    if (r.taper) {
-      ctx.beginPath();
-      ctx.moveTo(r.x, r.y + r.h);
-      ctx.lineTo(r.x + r.w, r.y + r.h);
-      ctx.lineTo(r.x + r.w * 0.62, r.y + r.h + r.taper);
-      ctx.lineTo(r.x + r.w * 0.3, r.y + r.h + r.taper * 0.7);
-      ctx.closePath();
-      ctx.fill();
-    }
-    // face shading + grass lip
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(r.x, r.y, 6, r.h);
-    ctx.fillStyle = '#5d7a52';
-    ctx.fillRect(r.x - 3, r.y, r.w + 6, 9);
-    ctx.fillStyle = '#7c9c66';
-    ctx.fillRect(r.x - 3, r.y, r.w + 6, 4);
-  }
+  for (const r of rocks) drawCliff(r);
 
   // camp
   drawZone(CAMP.x, CAMP.y, '#ffb454');
@@ -1206,16 +1305,15 @@ function render() {
   // bases
   for (const b of bases) {
     drawZone(b.x, b.y, '#8fc7ff');
-    const bx = b.wall ? (b.side === 'L' ? b.x - DECK_W / 2 : b.x + DECK_W / 2) : b.x;
     const by = b.wall ? b.y - DECK_H : b.y;
     if (!b.wall) {
       ctx.fillStyle = '#243352';
       ctx.fillRect(b.x - 30, b.y - 6, 60, 6);
     }
-    drawIcon(ctx, b.wall ? 'hut' : 'house', bx, by - 26, 38, '#8fc7ff');
-    drawIcon(ctx, 'chest', bx - 26, by - 12, 18, '#c9a86b');
-    if (b.mk2) drawIcon(ctx, 'anvil', bx + 26, by - 12, 19, '#ffd76b');
-    drawIcon(ctx, 'flying-flag', bx + 4, by - 48, 15, 'rgba(143,199,255,0.55)');
+    drawIcon(ctx, b.wall ? 'hut' : 'house', b.x, by - 26, 38, '#8fc7ff');
+    drawIcon(ctx, 'chest', b.x - 26, by - 12, 18, '#c9a86b');
+    if (b.mk2) drawIcon(ctx, 'anvil', b.x + 26, by - 12, 19, '#ffd76b');
+    drawIcon(ctx, 'flying-flag', b.x + 4, by - 48, 15, 'rgba(143,199,255,0.55)');
   }
 
   // death caches
@@ -1257,6 +1355,15 @@ function render() {
     }
   }
 
+  // lizards — neutral, live on the faces
+  for (const l of lizards) {
+    ctx.save();
+    ctx.translate(l.x, l.y);
+    if (l.dir < 0) ctx.scale(-1, 1);
+    drawIcon(ctx, 'gecko', 0, 0, 24, '#8fce7a', 0.9);
+    ctx.restore();
+  }
+
   // stingwing nests + wasps
   for (const w of stingwings) {
     drawIcon(ctx, 'wasp-sting', w.nest.x, w.nest.y, 26, 'rgba(0,0,0,0.35)');
@@ -1264,7 +1371,8 @@ function render() {
     ctx.save();
     ctx.translate(w.x, w.y + Math.sin(gameTime * 14) * 2);
     if (flip) ctx.scale(-1, 1);
-    drawIcon(ctx, 'wasp-sting', 0, 0, 30, w.mode === 'chase' ? '#ffd76b' : '#d9b45e');
+    const col = w.stun > 0 ? '#8a7a52' : (w.mode === 'chase' ? '#ffd76b' : '#d9b45e');
+    drawIcon(ctx, 'wasp-sting', 0, 0, 30, col, w.stun > 0 ? 0.6 : 1);
     ctx.restore();
   }
 
@@ -1277,9 +1385,16 @@ function render() {
     ctx.restore();
   }
 
+  // glove pulse burst
+  if (pulseFx) {
+    const t = pulseFx.t;
+    ctx.strokeStyle = 'rgba(143,227,255,' + (1 - t / 0.45) + ')';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(pulseFx.x, pulseFx.y, t / 0.45 * T.pulseRadius, 0, Math.PI * 2); ctx.stroke();
+  }
+
   drawPlayer();
 
-  // near clouds
   for (const c of clouds) if (c.layer === 1) drawIcon(ctx, 'fluffy-cloud', c.x, c.y, c.s * 1.4, '#ffffff', c.a * 0.7);
 
   // cloud sea
@@ -1290,14 +1405,14 @@ function render() {
   sg.addColorStop(1, 'rgba(230,228,240,1)');
   ctx.fillStyle = sg;
   ctx.fillRect(cam.x - cw / scale, seaTop - 120, cw * 2 / scale, 400);
-  for (let i = 0; i < 8; i++) {
-    const cx = ((i * 431) % 2400) + Math.sin(gameTime * 0.3 + i) * 30;
+  for (let i = 0; i < 10; i++) {
+    const cx = ((i * 431) % (WORLD.right + 200)) + Math.sin(gameTime * 0.3 + i) * 30;
     drawIcon(ctx, 'fluffy-cloud', cx, seaTop - 30 + (i % 3) * 22, 150, '#ffffff', 0.5);
   }
 
   ctx.restore();
 
-  // screen-edge pointers to off-screen caches, so a lost load is always findable
+  // screen-edge pointers to off-screen caches
   for (const c of caches) {
     const s = w2s(c.x, c.y);
     const m = 42;
@@ -1311,7 +1426,6 @@ function render() {
     ctx.restore();
   }
 
-  // brief autosave tick
   if (gameTime < saveNoticeUntil) {
     ctx.save();
     ctx.globalAlpha = clamp(saveNoticeUntil - gameTime, 0, 1) * 0.7;
@@ -1323,7 +1437,7 @@ function render() {
 function drawZone(x, y, color) {
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.globalAlpha = nearCampOrBase() && dist(player.x, player.y, x, y) < T.campRadius + 60 ? 0.35 : 0.1;
+  ctx.globalAlpha = dist(player.x, player.y, x, y) < T.campRadius + 60 ? 0.35 : 0.1;
   ctx.setLineDash([6, 8]);
   ctx.beginPath(); ctx.arc(x, y, T.campRadius, Math.PI, 0); ctx.stroke();
   ctx.restore();
@@ -1336,7 +1450,6 @@ function drawPlayer() {
   if (blink) return;
 
   ctx.save();
-  // glider canopy
   if (player.state === 'glide') {
     ctx.fillStyle = '#ff8a4a';
     ctx.beginPath();
@@ -1350,24 +1463,22 @@ function drawPlayer() {
     ctx.moveTo(cx + 22, py - 7); ctx.lineTo(cx + 6, py + 12);
     ctx.stroke();
   }
-  // body
   ctx.fillStyle = '#2c3e63';
   roundRect(px + 3, py + 12, P_W - 6, P_H - 14, 7);
-  // head
   ctx.fillStyle = '#e8c39a';
   ctx.beginPath(); ctx.arc(cx, py + 8, 8, 0, Math.PI * 2); ctx.fill();
-  // gloves
+
   const glow = player.state === 'climb';
   ctx.fillStyle = glow ? '#59d7ff' : '#94a8cf';
-  const handY = py + (glow ? 14 : 24);
-  const wallSide = player.climbSide === 'L' ? 1 : -1;
   if (glow) {
-    const hx = player.climbSide === 'L' ? px + P_W + 2 : px - 2;
-    ctx.beginPath(); ctx.arc(hx, handY, 5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(hx, handY + 14, 5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(89,215,255,' + (0.25 + Math.sin(gameTime * 8) * 0.12) + ')';
-    ctx.beginPath(); ctx.arc(hx + wallSide * 2, handY + 7, 12, 0, Math.PI * 2); ctx.fill();
+    // both hands up on the face in front
+    const handY = py + 10;
+    ctx.beginPath(); ctx.arc(px + 1, handY, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + P_W - 1, handY, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(89,215,255,' + (0.22 + Math.sin(gameTime * 8) * 0.1) + ')';
+    ctx.beginPath(); ctx.arc(cx, handY + 2, 16, 0, Math.PI * 2); ctx.fill();
   } else {
+    const handY = py + 24;
     ctx.beginPath(); ctx.arc(px + 3, handY, 4.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(px + P_W - 3, handY, 4.5, 0, Math.PI * 2); ctx.fill();
   }
@@ -1401,18 +1512,19 @@ function frame(now) {
     updateInteraction(dt);
     updateStingwings(dt);
     updateRazorbeaks(dt);
-    updateGoals();
+    updateLizards(dt);
+    if (pulseFx) { pulseFx.t += dt; if (pulseFx.t > 0.45) pulseFx = null; }
     for (const c of clouds) {
       c.x += c.v * dt;
-      if (c.x > 2650) c.x = -200;
+      if (c.x > WORLD.right + 250) c.x = -200;
     }
     autosaveTimer -= dt;
     if (autosaveTimer <= 0) { autosaveTimer = 20; saveGame(); }
   }
   input.jumpPressed = false;
+  input.interactPressed = false;
 
-  // camera
-  const targetX = clamp(player.x + P_W / 2, cw / scale / 2 * 0.4, 2400);
+  const targetX = clamp(player.x + P_W / 2, 0, WORLD.right);
   const targetY = clamp(player.y, WORLD.top, WORLD.cloudSea + 60 - chh / scale / 2);
   cam.x = lerp(cam.x, targetX, clamp(6 * dt, 0, 1));
   cam.y = lerp(cam.y, targetY, clamp(6 * dt, 0, 1));
@@ -1421,21 +1533,35 @@ function frame(now) {
   updateHUD();
   requestAnimationFrame(frame);
 }
+
+// ---------- boot ----------
+
 const resumed = loadGame();
-if (resumed) {
-  cam.x = player.x; cam.y = player.y;
-  if (player.hp <= 0) { player.hp = 100; }
+if (!resumed) {
+  generateWorld((Math.random() * 0xffffffff) >>> 0);
+  player.x = CAMP.x - P_W / 2;
+  player.y = CAMP.y - P_H;
+  lastSafe = CAMP;
 }
+initClouds();
+cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Homestead',
-      'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Open Sky', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
 // Debug/playtest handle (also used by automated smoke tests)
 window.SKYREACH = {
   player, inv, flags, bases, caches, T, version: GAME_VERSION,
-  saveGame, loadGame, getLastSafe: () => lastSafe,
+  saveGame, loadGame, generateWorld,
+  get rocks() { return rocks; },
+  get nodes() { return NODES; },
+  get stingwings() { return stingwings; },
+  get razorbeaks() { return razorbeaks; },
+  get lizards() { return lizards; },
+  get camp() { return CAMP; },
+  get seed() { return worldSeed; },
+  getLastSafe: () => lastSafe,
 };
 })();

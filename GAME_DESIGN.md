@@ -36,7 +36,8 @@ Session shape (target 3–10 min): leave a safe ledge with full energy, execute 
 ### 4.1 Movement **[v0.1]**
 
 - **Walk/jump** on island tops and ledges. No energy cost.
-- **Climb**: touching a cliff wall while airborne or walking into it attaches the magnetic gloves automatically (if energy > 0). While attached you can move up/down the face and mantle over the top edge.
+- **Cliffs never block movement [v0.3]**: they sit behind the play layer. You walk in front of them, and small cliff shelves give you platforms to stand on. This makes the world read as *terrain to choose from*, not corridors.
+- **Climb [v0.3 model]**: hold up while in front of a face to grab it (if energy > 0 and your gloves match the rock — see 4.4). On the face you move freely in 2D — up, down, sideways — mantle over the top edge, or hold down from a top to start a down-climb.
   - Moving on the wall drains energy per meter; hanging still drains only a slow trickle **[v0.2: cut to ~1/s]** — enough to keep the "energy is oxygen" pressure honest, cheap enough that stopping to read a route is a real option. Route-reading is the skill we want to reward, not thumb speed.
   - **Energy hits 0 → gloves release → you fall.** This is the core tension.
 - **Detach** deliberately (jump off the wall) to fall or start a glide.
@@ -55,7 +56,19 @@ Water/thirst is deliberately **not** in scope for now (one survival clock — fo
 
 **Death and loss [v0.2].** Dying scatters your **raw materials** into a cache at the spot you fell; crafted gear and permanent upgrades are never lost. You wake at the last base you actually stood in — not the nearest one to your body, because deaths are usually long falls and "nearest" would drag you back down past everything you built. The cache is marked on screen (with an edge pointer when off screen) and recovered by touching it. This is the Subnautica retrieval-dive inverted: the run back to your stuff is a *climb*, made with an empty pack, and it's some of the best tension in the game. Bases exist partly to make it optional — stash before you push higher.
 
-### 4.3 Harvesting **[v0.1]**
+### 4.3½ Cliff rock tiers **[v0.3]**
+
+Different rock demands different gear — the vertical version of Subnautica's depth-rated vehicles:
+
+| Rock | Look | Needs |
+|---|---|---|
+| Granite | warm grey, mossy lip | bare magnetic gloves |
+| Basalt | blue-black, columnar striations | **Grip spikes** |
+| Storm rock | violet, crystal-flecked | **Resonant magnets** (stacked on spikes) |
+
+The gate is at *grab time*: unclimbable rock simply refuses your hands (one short throttled notice says which upgrade it wants). Because the gate is material, not altitude, a remixed world can place a basalt shortcut low or a granite route high and the progression still holds.
+
+### 4.4 Harvesting **[v0.1]**
 
 Resource nodes grow on cliff faces and ledges. Harvesting takes ~1 second holding the interact button. Harvesting **while hanging on a wall costs a chunk of glove energy** — reaching out one-handed is expensive. Ledge nodes are free to harvest. Nodes respawn after a few minutes.
 
@@ -66,6 +79,8 @@ This makes "which nodes do I take on this energy budget" the moment-to-moment de
 ### 5.1 Structure
 
 A vertical archipelago of floating islands in loose **altitude bands**. Higher bands = richer materials, harsher threats, and (later) environmental hazards. Islands within a band are reachable by gliding; moving *up* a band always requires climbing something.
+
+**Remixed worlds [v0.3].** The world is generated from a seed on every new game: island sizes, cliff heights, shelf and node placement, nests, patrol routes and lizards all reroll, while the generator guarantees the spine — a safe granite start island with several practice cliffs, glide-reachable gaps, enough early ore/crystal to reach each gear tier, and a storm-rock summit spike at the end of the chain. Open-world posture: no goal ticker, no tutorial popups; names and labels live in the pack and base menus. The seed is stored in the save, so resuming keeps your world and wiping remixes it.
 
 | Band | Name | Character | Key materials |
 |---|---|---|---|
@@ -137,10 +152,15 @@ Reach is gated by energy ceiling and glide tech, not by artificial walls:
 
 Threat design rule: threats attack your *position and energy*, not just your health bar. Getting knocked off a wall at low energy is scarier than the damage itself.
 
-### 8.1 v0.1 threats
+### 8.1 Current threats
 
-- **Stingwing** (wasp-sting icon): territorial hoverer nesting on Band 1 cliffs. Chases when you climb into its radius; hits do damage **and knock you off the wall**. Counterplay: route around, bait it out, or tank it with food/health buffer.
-- **Razorbeak** (vulture icon): patrols open sky between islands; dives at gliding players. Counterplay: watch its patrol, time your launch, or drop altitude to break the dive.
+- **Stingwing** (wasp-sting icon): territorial hoverer nesting on cliffs. Chases when you climb into its radius; hits do damage **and knock you off the wall**. Counterplay: route around, bait it out — or **Glove pulse** it.
+- **Razorbeak** (vulture icon): patrols open sky between islands; dives at gliding players. Counterplay: watch its patrol, time your launch, drop altitude to break the dive — or pulse it mid-dive.
+- **Glove pulse [v0.3]**: a cheap craftable magnetic burst on the hand button. Costs glove energy (the same resource climbing needs), so self-defense on a wall spends your safety margin — defense is a budgeting decision, not a free action.
+
+### 8.1½ Neutral life **[v0.3]**
+
+- **Cliff lizards** (gecko icon): live on the faces, wander them, skitter away when you get close. Harmless. The wall is a biome, so most of what lives there shouldn't want to kill you — later: scannable, maybe a food chain (Razorbeaks hunting lizards).
 
 ### 8.2 Later
 
@@ -165,10 +185,11 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each version ships with in-game changelog notes. Rough roadmap:
 
 - **0.1 — First Climb** *(this build)*: core movement (walk/climb/glide), energy, vitals, harvest, personal fabricator, 4 recipes, base kit + Mk2 teaser, 2 threats, 2 islands, version/changelog UI.
-- **0.2 — Homestead** *(current build)*: cliff-wall base placement with standable decks, base storage, material-drop death with recoverable caches, respawn at last base, autosave to localStorage, cheaper idle hang.
-- **0.3 — The Shear**: Band 2, wind during glides, new materials + wind-tech recipes.
-- **0.4 — Alive Sky**: creature AI pass, nests, day/night, ambient life.
-- **0.5 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
+- **0.2 — Homestead**: cliff-wall base placement with standable decks, base storage, material-drop death with recoverable caches, respawn at last base, autosave to localStorage, cheaper idle hang.
+- **0.3 — Open Sky** *(current build)*: non-blocking climbable cliff *faces* (walk past, grab anywhere, free 2D wall movement, climb down from tops), seeded world remix per run, rock tiers gated by gear (granite/basalt/storm rock), Glove pulse defense, neutral cliff lizards, tutorial layer removed.
+- **0.4 — The Shear**: wind during glides, thermal wing, new materials + wind-tech recipes, richer generation (caves? overhangs?).
+- **0.5 — Alive Sky**: creature AI pass, nest ecology, day/night, scannable life.
+- **0.6 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
 
 ## 12. Design questions
 

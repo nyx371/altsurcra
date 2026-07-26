@@ -1,8 +1,23 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.2.0';
+const GAME_VERSION = '0.3.0';
 
 const CHANGELOG = [
+  {
+    version: '0.3.0',
+    name: 'Open Sky',
+    date: '2026-07-26',
+    notes: [
+      'Cliffs no longer block you — walk in front of them, hold up to grab the face, climb anywhere on it',
+      'Climb down from any cliff top by holding down; small cliff shelves you can stand on',
+      'The world is remixed from a random seed on every new game (resume keeps your world)',
+      'Cliff rock tiers: granite bare-handed, basalt needs Grip spikes, storm rock needs Resonant magnets',
+      'Glove pulse (craftable): tap the hand near a creature to blast Stingwings and Razorbeaks away',
+      'Neutral lizards live on the cliff faces and skitter away from you',
+      'Guided goals and tutorial popups removed — explore; labels live in your pack',
+      'Harvest button is now a hand',
+    ],
+  },
   {
     version: '0.2.0',
     name: 'Homestead',

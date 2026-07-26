@@ -16,19 +16,21 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Action | Touch | Keyboard |
 |---|---|---|
 | Move / steer / climb | left-side virtual joystick | WASD / arrows |
+| Grab a cliff face / climb | hold up while in front of one | W / up |
+| Climb down from a top | hold down | S / down |
 | Jump · hold to glide (needs Glider) | right big button | Space |
-| Harvest (hold) | claw button | E |
+| Harvest (hold) · Glove pulse (tap, once crafted) | hand button | E |
 | Enter base | house button (appears in range) | E |
 | Pack + personal fabricator | knapsack button | C |
-| Changelog + wipe save | version badge (top right) | — |
+| Changelog + wipe save / remix world | version badge (top right) | — |
 
-Walk or glide into a cliff face and the magnetic gloves attach automatically. Climbing drains glove energy — at zero, you fall. Recharge on flat ground, fastest near the camp or a base you've placed.
+Cliffs never block you — walk in front of them. Hold up to grab the face and climb anywhere on it; climbing drains glove energy and at zero you fall. Recharge on flat ground, fastest near the camp or a base. Granite climbs bare-handed; basalt needs **Grip spikes**; storm rock needs **Resonant magnets**.
 
-## First-climb route
+## The world
 
-Harvest fiber + stone on the practice cliff → craft the Glider → glide east to Skyshard Spire → mine ore + crystal (mind the Stingwing and the Razorbeak) → battery Mk1 → place a base, build Fabricator Mk2 → battery Mk2 → climb The Needle, bolting a cliff base to its face partway up.
+Every new game generates a fresh island chain from a random seed — resuming keeps your world, wiping the save remixes it. There are no guided goals: explore, harvest, craft, and push upward. Stingwings guard cliffs and Razorbeaks patrol the gaps (craft the **Glove pulse** and tap the hand button to drive them off); neutral lizards just live on the rock.
 
-Dying scatters your raw materials into a cache where you fell — gear and upgrades are safe, and the cache is marked so you can climb back for the rest. Progress autosaves to your device; wipe it from the changelog panel.
+Dying scatters your raw materials into a cache where you fell — gear and upgrades are safe, and the cache is marked so you can climb back for the rest. Progress autosaves to your device.
 
 ## Credits
 
