@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b1530">
+<title>Skyreach</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230b1530'/%3E%3Cpath d='M20 78 50 30 68 58 80 42 88 78Z' fill='%238fc7ff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="bars">
+    <div class="bar" id="bar-health"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+    <div class="bar" id="bar-food"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+    <div class="bar" id="bar-energy"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+  </div>
+  <button id="version-badge" type="button"><span class="badge-icon"></span><span id="version-text"></span></button>
+</div>
+
+<div id="goal-line"><span id="goal-text"></span></div>
+<div id="toasts"></div>
+
+<div id="stick-zone"><div id="stick-base"><div id="stick-nub"></div></div></div>
+
+<div id="action-buttons">
+  <button class="abtn" id="btn-pack" type="button"><span class="abtn-icon"></span></button>
+  <button class="abtn" id="btn-interact" type="button"><span class="abtn-icon"></span><svg class="abtn-ring" viewBox="0 0 72 72"><circle cx="36" cy="36" r="33"></circle></svg></button>
+  <button class="abtn big" id="btn-jump" type="button"><span class="abtn-icon"></span></button>
+</div>
+
+<div class="overlay hidden" id="overlay-pack">
+  <div class="panel">
+    <div class="panel-head"><span class="panel-icon" id="pack-icon"></span><h2>Pack &amp; Personal Fabricator</h2><button class="close-btn" data-close type="button">&times;</button></div>
+    <h3>Supplies</h3>
+    <div id="inv-grid" class="inv-grid"></div>
+    <h3>Fabricate</h3>
+    <div id="recipe-list" class="recipe-list"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay-base">
+  <div class="panel">
+    <div class="panel-head"><span class="panel-icon" id="base-icon"></span><h2 id="base-title">Base</h2><button class="close-btn" data-close type="button">&times;</button></div>
+    <p class="panel-note" id="base-note"></p>
+    <div id="base-recipe-list" class="recipe-list"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay-changelog">
+  <div class="panel">
+    <div class="panel-head"><span class="panel-icon" id="cl-icon"></span><h2>Skyreach — builds</h2><button class="close-btn" data-close type="button">&times;</button></div>
+    <div id="changelog-body"></div>
+    <p class="panel-note">Icons by <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> contributors (CC BY 3.0).</p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay-death">
+  <div class="panel small">
+    <h2 id="death-title">You fell into the cloud sea</h2>
+    <p class="panel-note" id="death-note">Your gear is intact. The sky forgives — this time.</p>
+    <button id="btn-respawn" class="primary-btn" type="button">Wake up</button>
+  </div>
+</div>
+
+<script src="js/icons.js"></script>
+<script src="js/version.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
