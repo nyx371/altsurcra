@@ -41,7 +41,7 @@ const T = {
   jumpVel: 560,
   climbSpeed: 110,
   climbDrainMove: 16,   // energy/s while moving on a wall
-  climbDrainIdle: 2.5,  // energy/s while hanging still
+  climbDrainIdle: 0.9,  // energy/s hanging still — cheap enough to stop and plan a route
   harvestWallCost: 10,  // flat energy per wall harvest
   harvestTime: 0.9,
   regenGround: 7,       // energy/s standing anywhere safe
@@ -55,7 +55,11 @@ const T = {
   fallSafeVel: 620,
   fallDmgScale: 0.09,
   invulnTime: 0.9,
+  cacheGrabRadius: 60,
 };
+
+// Raw materials scatter into a recoverable cache on death; crafted upgrades never do.
+const DROP_ON_DEATH = ['berry', 'ration', 'fiber', 'stone', 'ore', 'crystal', 'basekit'];
 
 // ---------- world ----------
 
@@ -121,11 +125,11 @@ const RECIPES = [
   { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',         cost: { berry: 2 },            desc: 'Dense food. +35 food when eaten.' },
   { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',  cost: { fiber: 4, stone: 2 },  desc: 'Hold Jump in the air to glide.', flag: 'glider', once: true },
   { id: 'battery1', tier: 'personal', name: 'Glove battery Mk1', icon: 'battery-pack', cost: { ore: 2, crystal: 2 },  desc: 'Max glove energy 100 → 150.', flag: 'battery1', once: true },
-  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',        cost: { stone: 6, fiber: 4 },  desc: 'Placeable base: recharge zone + respawn.' },
+  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',        cost: { stone: 6, fiber: 4 },  desc: 'Place on ground or bolt to a cliff. Storage, fast recharge, respawn.' },
   { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',        cost: { ore: 3, crystal: 2 },  desc: 'Unlocks heavy fabrication at this base.' },
   { id: 'battery2', tier: 'mk2',      name: 'Glove battery Mk2', icon: 'battery-pack', cost: { ore: 4, crystal: 4 },  desc: 'Max glove energy → 220. Needs Mk1.', flag: 'battery2', once: true, needs: 'battery1' },
   { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'hang-glider',  cost: {},                      desc: 'Ride rising air. Coming in v0.3.', locked: true },
-  { id: 'grapplebolt', tier: 'mk2',   name: 'Grapple bolt',      icon: 'grapple',      cost: {},                      desc: 'Instant mid-air wall attach. Coming in v0.2.', locked: true },
+  { id: 'grapplebolt', tier: 'mk2',   name: 'Grapple bolt',      icon: 'grapple',      cost: {},                      desc: 'Instant mid-air wall attach. Coming in v0.3.', locked: true },
 ];
 
 // ---------- state ----------
@@ -145,9 +149,8 @@ const player = {
 
 const inv = { berry: 0, ration: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, basekit: 0 };
 const flags = { glider: false, battery1: false, battery2: false, summit: false };
-const bases = []; // {x, y, mk2}
-let respawnPoint = { x: CAMP.x, y: CAMP.y };
-let activeBase = null;
+const bases = [];   // {x, y, mk2, wall, side, store:{}, deck:rect}
+const caches = [];  // {x, y, items:{}} — dropped on death, climb back for them
 let paused = false;
 let gameTime = 0;
 
@@ -180,7 +183,8 @@ const GOALS = [
   { text: 'Fabricate the Glove battery Mk1.', done: () => flags.battery1 },
   { text: 'Craft a Base kit, place a base near the spire, and build the Fabricator Mk2.', done: () => bases.some(b => b.mk2) },
   { text: 'Fabricate the Glove battery Mk2, then climb The Needle in one push.', done: () => flags.summit },
-  { text: 'Summit reached. The Shear opens in v0.3 — thanks for playtesting.', done: () => false },
+  { text: 'Bolt a base to The Needle mid-climb — open your Pack while gripping the wall and place a Base kit.', done: () => bases.some(b => b.wall) },
+  { text: 'Summit reached, cliff base standing. The Shear opens in v0.3 — thanks for playtesting.', done: () => false },
 ];
 
 // ---------- input ----------
@@ -238,6 +242,7 @@ stickZone.addEventListener('pointercancel', joyEnd);
 const btnJump = document.getElementById('btn-jump');
 const btnInteract = document.getElementById('btn-interact');
 const btnPack = document.getElementById('btn-pack');
+const btnBase = document.getElementById('btn-base');
 
 function bindHold(el, prop) {
   el.addEventListener('pointerdown', e => {
@@ -254,6 +259,7 @@ function bindHold(el, prop) {
 bindHold(btnJump, 'jump');
 bindHold(btnInteract, 'interact');
 btnPack.addEventListener('click', () => togglePack());
+btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBase(b); });
 
 window.addEventListener('keydown', e => {
   if (e.repeat) return;
@@ -471,6 +477,7 @@ function updatePlayer(dt) {
   if (player.state === 'ground') {
     const zone = nearCampOrBase();
     player.energy += (zone ? T.regenCamp : T.regenGround) * dt;
+    if (zone) lastSafe = zone;
   }
   player.energy = clamp(player.energy, 0, player.maxEnergy);
 }
@@ -490,8 +497,39 @@ function die(cause) {
   if (deathCause) return;
   deathCause = cause;
   paused = true;
+  const dropped = dropCache(player.x + P_W / 2, player.y + P_H / 2);
   document.getElementById('death-title').textContent = cause;
+  document.getElementById('death-note').textContent = dropped
+    ? 'Your materials scattered where you fell. Your gear and upgrades are still yours — go back and get the rest.'
+    : 'You were carrying nothing. Your gear and upgrades are still yours.';
   document.getElementById('overlay-death').classList.remove('hidden');
+  saveGame();
+}
+
+// You wake at the last safe place you actually stood. Deaths are usually long falls,
+// so "nearest to the corpse" would drag you back down past every base you built.
+let lastSafe = CAMP;
+
+// A wall base is anchored at the rock face, so you stand on its deck, not inside the cliff.
+function standPos(place) {
+  if (!place.wall) return { x: place.x, y: place.y };
+  return {
+    x: place.side === 'L' ? place.x - DECK_W / 2 : place.x + DECK_W / 2,
+    y: place.y - DECK_H,
+  };
+}
+
+function dropCache(x, y) {
+  const items = {};
+  let any = false;
+  for (const id of DROP_ON_DEATH) {
+    if (inv[id] > 0) { items[id] = inv[id]; inv[id] = 0; any = true; }
+  }
+  if (!any) return false;
+  // Keep the cache retrievable: never let it sink into the cloud sea.
+  caches.push({ x: clamp(x, WORLD.left, WORLD.right), y: Math.min(y, WORLD.cloudSea - 140), items });
+  while (caches.length > 3) caches.shift();
+  return true;
 }
 
 function respawn() {
@@ -499,13 +537,27 @@ function respawn() {
   player.hp = 100;
   player.food = Math.max(50, player.food);
   player.energy = player.maxEnergy;
-  player.x = respawnPoint.x - P_W / 2;
-  player.y = respawnPoint.y - P_H - 2;
+  const sp = standPos(lastSafe);
+  player.x = sp.x - P_W / 2;
+  player.y = sp.y - P_H - 2;
   player.vx = 0; player.vy = 0;
   player.state = 'air';
   player.climbRect = null;
   document.getElementById('overlay-death').classList.add('hidden');
   paused = anyOverlayOpen();
+  saveGame();
+}
+
+function updateCaches() {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  for (let i = caches.length - 1; i >= 0; i--) {
+    if (dist(px, py, caches[i].x, caches[i].y) > T.cacheGrabRadius) continue;
+    let n = 0;
+    for (const [id, count] of Object.entries(caches[i].items)) { inv[id] += count; n += count; }
+    caches.splice(i, 1);
+    toast('Cache recovered — ' + n + ' items', 'good', 'swap-bag');
+    saveGame();
+  }
 }
 
 function updateVitals(dt) {
@@ -555,8 +607,10 @@ function updateInteraction(dt) {
       node.depletedUntil = gameTime + def.respawn;
       player.harvest = null;
       toast('+' + def.yield + ' ' + def.name, 'good', def.icon);
+      saveGame();
     }
   } else {
+    // keyboard fallback: E opens a base when no node competes for the button
     if (input.interactHeld && !node) {
       const b = nearestBase();
       if (b && !player._baseTapLatch) { player._baseTapLatch = true; openBase(b); }
@@ -569,7 +623,10 @@ function updateInteraction(dt) {
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
   const prog = player.harvest ? player.harvest.t / T.harvestTime : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
-  btnInteract.classList.toggle('glide-ready', !!node || !!nearestBase());
+  btnInteract.classList.toggle('glide-ready', !!node);
+
+  // a base in reach gets its own button, so standing on a resource never hides your door
+  btnBase.classList.toggle('hidden', !nearestBase());
 }
 
 // ---------- creatures ----------
@@ -681,6 +738,7 @@ function craft(recipe, base) {
   if (recipe.id === 'mk2' && base) { base.mk2 = true; toast('Fabricator Mk2 online', 'good', 'anvil'); }
   renderPack();
   if (openBaseRef && !document.getElementById('overlay-base').classList.contains('hidden')) renderBase(openBaseRef);
+  saveGame();
 }
 
 function eatItem(id) {
@@ -691,15 +749,143 @@ function eatItem(id) {
   renderPack();
 }
 
+// Bases go on flat ground or bolt straight onto a cliff face. A wall base extends a
+// deck you can stand on, turning any cliff into a rest stop.
+const DECK_W = 78, DECK_H = 12;
+
+function makeWallDeck(base) {
+  const x = base.side === 'L' ? base.x - DECK_W : base.x;
+  const deck = { x, y: base.y - DECK_H, w: DECK_W, h: DECK_H, kind: 'perch', deck: true };
+  ROCKS.push(deck);
+  base.deck = deck;
+  return deck;
+}
+
 function placeBase() {
   if (inv.basekit <= 0) return;
-  if (player.state !== 'ground') { toast('Need solid ground to place a base', 'bad', 'house'); return; }
+  const onWall = player.state === 'climb';
+  if (player.state !== 'ground' && !onWall) {
+    toast('Place a base on solid ground or while gripping a wall', 'bad', 'house');
+    return;
+  }
+  let b;
+  if (onWall) {
+    const r = player.climbRect;
+    // anchor at the rock face, deck sticking out on the player's side
+    const side = player.climbSide;
+    b = {
+      x: side === 'L' ? r.x : r.x + r.w,
+      y: player.y + P_H,
+      mk2: false, wall: true, side, store: {},
+    };
+    makeWallDeck(b);
+    bases.push(b);
+    lastSafe = b;
+    player.state = 'ground';
+    player.climbRect = null;
+    const sp = standPos(b);
+    player.x = sp.x - P_W / 2;
+    player.y = sp.y - P_H;
+    toast('Base bolted to the cliff — respawn point set', 'good', 'hut');
+  } else {
+    b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false, wall: false, store: {} };
+    bases.push(b);
+    lastSafe = b;
+    toast('Base placed — respawn point set', 'good', 'house');
+  }
   inv.basekit -= 1;
-  const b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false };
-  bases.push(b);
-  respawnPoint = { x: b.x, y: b.y };
-  toast('Base placed — respawn point set', 'good', 'house');
   closeOverlays();
+  saveGame();
+}
+
+// ---------- storage ----------
+
+function storeItem(base, id, all) {
+  const n = all ? inv[id] : 1;
+  if (n <= 0) return;
+  inv[id] -= n;
+  base.store[id] = (base.store[id] || 0) + n;
+  renderBase(base);
+  saveGame();
+}
+
+function takeItem(base, id, all) {
+  const have = base.store[id] || 0;
+  const n = all ? have : Math.min(1, have);
+  if (n <= 0) return;
+  base.store[id] = have - n;
+  if (base.store[id] <= 0) delete base.store[id];
+  inv[id] += n;
+  renderBase(base);
+  saveGame();
+}
+
+function depositAll(base) {
+  let moved = 0;
+  for (const id of DROP_ON_DEATH) {
+    if (inv[id] > 0) { base.store[id] = (base.store[id] || 0) + inv[id]; moved += inv[id]; inv[id] = 0; }
+  }
+  if (moved) toast('Stored ' + moved + ' items', 'good', 'chest');
+  renderBase(base);
+  saveGame();
+}
+
+// ---------- save / load ----------
+
+const SAVE_KEY = 'skyreach.save.v1';
+let saveNoticeUntil = 0;
+let wiping = false; // set during a wipe so the unload autosave can't resurrect the save
+
+function saveGame() {
+  if (wiping) return;
+  try {
+    const data = {
+      v: GAME_VERSION,
+      gameTime,
+      player: {
+        x: player.x, y: player.y, hp: player.hp, food: player.food,
+        energy: player.energy, maxEnergy: player.maxEnergy,
+      },
+      inv, flags,
+      bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, wall: !!b.wall, side: b.side, store: b.store || {} })),
+      lastSafe: bases.indexOf(lastSafe), // -1 = the starting camp
+      caches,
+      nodes: NODES.map(n => Math.max(0, n.depletedUntil - gameTime)),
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    saveNoticeUntil = gameTime + 1.4;
+  } catch (e) { /* private mode / quota — play on without persistence */ }
+}
+
+function loadGame() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { return false; }
+  if (!data || !data.player) return false;
+
+  gameTime = data.gameTime || 0;
+  Object.assign(player, data.player);
+  player.vx = 0; player.vy = 0; player.state = 'air'; player.climbRect = null; player.harvest = null;
+  for (const k of Object.keys(inv)) inv[k] = data.inv && data.inv[k] ? data.inv[k] : 0;
+  for (const k of Object.keys(flags)) flags[k] = !!(data.flags && data.flags[k]);
+
+  bases.length = 0;
+  for (const b of data.bases || []) {
+    const base = { x: b.x, y: b.y, mk2: !!b.mk2, wall: !!b.wall, side: b.side, store: b.store || {} };
+    if (base.wall) makeWallDeck(base);
+    bases.push(base);
+  }
+  const li = typeof data.lastSafe === 'number' ? data.lastSafe : -1;
+  lastSafe = li >= 0 && bases[li] ? bases[li] : CAMP;
+  caches.length = 0;
+  for (const c of data.caches || []) caches.push(c);
+  if (data.nodes) NODES.forEach((n, i) => { n.depletedUntil = gameTime + (data.nodes[i] || 0); });
+  return true;
+}
+
+function resetGame() {
+  wiping = true;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+  location.reload();
 }
 
 // overlay plumbing
@@ -795,10 +981,36 @@ function openBase(base) {
   openOverlay('overlay-base');
 }
 function renderBase(base) {
-  document.getElementById('base-title').textContent = base.mk2 ? 'Base — Fabricator Mk2' : 'Base';
+  document.getElementById('base-title').textContent =
+    (base.wall ? 'Cliff base' : 'Base') + (base.mk2 ? ' — Fabricator Mk2' : '');
   document.getElementById('base-note').textContent = base.mk2
     ? 'Heavy fabrication online. Glove energy recharges fast inside the base perimeter.'
     : 'A powered fabricator needs an anchor point. Build the Mk2 here to unlock heavier gear.';
+
+  // storage
+  const store = document.getElementById('base-store');
+  store.innerHTML = '';
+  const ids = Object.keys(base.store || {}).filter(id => base.store[id] > 0);
+  if (!ids.length) {
+    store.innerHTML = '<div class="inv-empty">Storage empty. Stash materials here so a fall cannot cost you them.</div>';
+  } else {
+    for (const id of ids) {
+      const el = document.createElement('div');
+      el.className = 'inv-item';
+      el.innerHTML = '<span class="i-icon">' + svgIcon(ITEMS[id].icon) + '</span><span></span><span class="i-count">' + base.store[id] + '</span>';
+      el.children[1].textContent = ITEMS[id].name;
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = 'Take';
+      b.addEventListener('click', () => takeItem(base, id, true));
+      el.appendChild(b);
+      store.appendChild(el);
+    }
+  }
+  const carrying = DROP_ON_DEATH.some(id => inv[id] > 0);
+  const dep = document.getElementById('btn-deposit');
+  dep.disabled = !carrying;
+  dep.onclick = () => depositAll(base);
+
   const list = document.getElementById('base-recipe-list');
   list.innerHTML = '';
   if (!base.mk2) {
@@ -832,6 +1044,18 @@ document.getElementById('version-badge').addEventListener('click', () => {
 
 document.getElementById('btn-respawn').addEventListener('click', respawn);
 
+// wipe save — two taps, so a stray thumb never nukes a playtest
+const resetBtn = document.getElementById('btn-reset');
+resetBtn.addEventListener('click', () => {
+  if (resetBtn.classList.contains('confirm')) { resetGame(); return; }
+  resetBtn.classList.add('confirm');
+  resetBtn.textContent = 'Tap again to wipe everything';
+  setTimeout(() => {
+    resetBtn.classList.remove('confirm');
+    resetBtn.textContent = 'Wipe save & restart';
+  }, 3000);
+});
+
 // static UI icons
 
 document.querySelector('#bar-health .bar-icon').innerHTML = svgIcon('hearts');
@@ -840,6 +1064,7 @@ document.querySelector('#bar-energy .bar-icon').innerHTML = svgIcon('power-light
 document.querySelector('#version-badge .badge-icon').innerHTML = svgIcon('mountain-climbing');
 document.getElementById('version-text').textContent = 'v' + GAME_VERSION;
 document.querySelector('#btn-pack .abtn-icon').innerHTML = svgIcon('knapsack');
+document.querySelector('#btn-base .abtn-icon').innerHTML = svgIcon('house');
 document.querySelector('#btn-interact .abtn-icon').innerHTML = svgIcon('grapple');
 document.querySelector('#btn-jump .abtn-icon').innerHTML = svgIcon('jump-across');
 document.getElementById('pack-icon').innerHTML = svgIcon('gear-hammer');
@@ -938,6 +1163,15 @@ function render() {
   // rocks
   for (const r of ROCKS) {
     if (r.kind === 'perch') {
+      if (r.deck) { // built decking, not rock
+        ctx.fillStyle = '#243352';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.fillStyle = '#8fc7ff';
+        ctx.fillRect(r.x, r.y, r.w, 3);
+        ctx.fillStyle = 'rgba(143,199,255,0.35)';
+        for (let i = 8; i < r.w - 4; i += 18) ctx.fillRect(r.x + i, r.y + r.h, 3, 10);
+        continue;
+      }
       ctx.fillStyle = '#3a3348';
       ctx.fillRect(r.x, r.y, r.w, r.h);
       ctx.fillStyle = '#5d7a52';
@@ -972,10 +1206,28 @@ function render() {
   // bases
   for (const b of bases) {
     drawZone(b.x, b.y, '#8fc7ff');
-    ctx.fillStyle = '#243352';
-    ctx.fillRect(b.x - 30, b.y - 6, 60, 6);
-    drawIcon(ctx, 'house', b.x, b.y - 26, 40, '#8fc7ff');
-    if (b.mk2) drawIcon(ctx, 'anvil', b.x + 30, b.y - 14, 20, '#ffd76b');
+    const bx = b.wall ? (b.side === 'L' ? b.x - DECK_W / 2 : b.x + DECK_W / 2) : b.x;
+    const by = b.wall ? b.y - DECK_H : b.y;
+    if (!b.wall) {
+      ctx.fillStyle = '#243352';
+      ctx.fillRect(b.x - 30, b.y - 6, 60, 6);
+    }
+    drawIcon(ctx, b.wall ? 'hut' : 'house', bx, by - 26, 38, '#8fc7ff');
+    drawIcon(ctx, 'chest', bx - 26, by - 12, 18, '#c9a86b');
+    if (b.mk2) drawIcon(ctx, 'anvil', bx + 26, by - 12, 19, '#ffd76b');
+    drawIcon(ctx, 'flying-flag', bx + 4, by - 48, 15, 'rgba(143,199,255,0.55)');
+  }
+
+  // death caches
+  for (const c of caches) {
+    const bob = Math.sin(gameTime * 2.4 + c.x) * 4;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#ffd76b';
+    ctx.beginPath(); ctx.arc(c.x, c.y + bob, 22 + Math.sin(gameTime * 3) * 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    drawIcon(ctx, 'swap-bag', c.x, c.y + bob, 30, '#ffd76b');
+    drawIcon(ctx, 'position-marker', c.x, c.y + bob - 34, 18, '#ffd76b', 0.85);
   }
 
   // nodes
@@ -1044,6 +1296,28 @@ function render() {
   }
 
   ctx.restore();
+
+  // screen-edge pointers to off-screen caches, so a lost load is always findable
+  for (const c of caches) {
+    const s = w2s(c.x, c.y);
+    const m = 42;
+    if (s.x > m && s.x < cw - m && s.y > m && s.y < chh - m) continue;
+    const px = clamp(s.x, m, cw - m), py = clamp(s.y, m, chh - m);
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = 'rgba(10,16,36,0.7)';
+    ctx.beginPath(); ctx.arc(px, py, 18, 0, Math.PI * 2); ctx.fill();
+    drawIcon(ctx, 'swap-bag', px, py, 20, '#ffd76b');
+    ctx.restore();
+  }
+
+  // brief autosave tick
+  if (gameTime < saveNoticeUntil) {
+    ctx.save();
+    ctx.globalAlpha = clamp(saveNoticeUntil - gameTime, 0, 1) * 0.7;
+    drawIcon(ctx, 'save', cw - 24, chh - 24, 18, '#aecbff');
+    ctx.restore();
+  }
 }
 
 function drawZone(x, y, color) {
@@ -1112,6 +1386,7 @@ function roundRect(x, y, w, h, r) {
 
 // ---------- main loop ----------
 
+let autosaveTimer = 20;
 let last = performance.now();
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
@@ -1122,6 +1397,7 @@ function frame(now) {
     gameTime += dt;
     updatePlayer(dt);
     updateVitals(dt);
+    updateCaches();
     updateInteraction(dt);
     updateStingwings(dt);
     updateRazorbeaks(dt);
@@ -1130,6 +1406,8 @@ function frame(now) {
       c.x += c.v * dt;
       if (c.x > 2650) c.x = -200;
     }
+    autosaveTimer -= dt;
+    if (autosaveTimer <= 0) { autosaveTimer = 20; saveGame(); }
   }
   input.jumpPressed = false;
 
@@ -1143,10 +1421,21 @@ function frame(now) {
   updateHUD();
   requestAnimationFrame(frame);
 }
+const resumed = loadGame();
+if (resumed) {
+  cam.x = player.x; cam.y = player.y;
+  if (player.hp <= 0) { player.hp = 100; }
+}
 requestAnimationFrame(frame);
 
-toast('Skyreach v' + GAME_VERSION + ' — First Climb', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Homestead',
+      'good', 'mountain-climbing');
+window.addEventListener('pagehide', saveGame);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
 // Debug/playtest handle (also used by automated smoke tests)
-window.SKYREACH = { player, inv, flags, bases, T, version: GAME_VERSION };
+window.SKYREACH = {
+  player, inv, flags, bases, caches, T, version: GAME_VERSION,
+  saveGame, loadGame, getLastSafe: () => lastSafe,
+};
 })();

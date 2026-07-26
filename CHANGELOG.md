@@ -2,6 +2,16 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.2.0 — Homestead (2026-07-26)
+
+- Bolt bases straight onto cliff faces — open your Pack while gripping the wall and place a Base kit
+- Cliff bases extend a deck you can stand on, turning any wall into a rest stop
+- Storage at every base: deposit all, take back what you need
+- Death now scatters your raw materials into a recoverable cache — climb back for them
+- Upgrades and gear are never lost on death; you respawn at the nearest base
+- Progress saves to your device automatically; wipe it from the changelog panel
+- Hanging still on a wall costs far less energy — stop and plan your route
+
 ## v0.1.1 — Steady Hands (2026-07-26)
 
 - Blocked double-tap zoom, pinch zoom, text selection and the iOS long-press magnifier

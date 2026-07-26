@@ -17,15 +17,18 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 |---|---|---|
 | Move / steer / climb | left-side virtual joystick | WASD / arrows |
 | Jump · hold to glide (needs Glider) | right big button | Space |
-| Harvest (hold) / open base | claw button | E |
+| Harvest (hold) | claw button | E |
+| Enter base | house button (appears in range) | E |
 | Pack + personal fabricator | knapsack button | C |
-| Changelog | version badge (top right) | — |
+| Changelog + wipe save | version badge (top right) | — |
 
 Walk or glide into a cliff face and the magnetic gloves attach automatically. Climbing drains glove energy — at zero, you fall. Recharge on flat ground, fastest near the camp or a base you've placed.
 
-## First-climb route (v0.1)
+## First-climb route
 
-Harvest fiber + stone on the practice cliff → craft the Glider → glide east to Skyshard Spire → mine ore + crystal (mind the Stingwing and the Razorbeak) → battery Mk1 → place a base, build Fabricator Mk2 → battery Mk2 → climb The Needle.
+Harvest fiber + stone on the practice cliff → craft the Glider → glide east to Skyshard Spire → mine ore + crystal (mind the Stingwing and the Razorbeak) → battery Mk1 → place a base, build Fabricator Mk2 → battery Mk2 → climb The Needle, bolting a cliff base to its face partway up.
+
+Dying scatters your raw materials into a cache where you fell — gear and upgrades are safe, and the cache is marked so you can climb back for the rest. Progress autosaves to your device; wipe it from the changelog panel.
 
 ## Credits
 

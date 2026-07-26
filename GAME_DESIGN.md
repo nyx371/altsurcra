@@ -37,7 +37,7 @@ Session shape (target 3–10 min): leave a safe ledge with full energy, execute 
 
 - **Walk/jump** on island tops and ledges. No energy cost.
 - **Climb**: touching a cliff wall while airborne or walking into it attaches the magnetic gloves automatically (if energy > 0). While attached you can move up/down the face and mantle over the top edge.
-  - Moving on the wall drains energy per meter; hanging still drains a trickle (magnets stay powered).
+  - Moving on the wall drains energy per meter; hanging still drains only a slow trickle **[v0.2: cut to ~1/s]** — enough to keep the "energy is oxygen" pressure honest, cheap enough that stopping to read a route is a real option. Route-reading is the skill we want to reward, not thumb speed.
   - **Energy hits 0 → gloves release → you fall.** This is the core tension.
 - **Detach** deliberately (jump off the wall) to fall or start a glide.
 - **Glide** (requires crafted Glider): hold the glide button while airborne to deploy. Slow descent, good horizontal speed, steerable. Gliding costs nothing — altitude is the currency you spend.
@@ -47,11 +47,13 @@ Session shape (target 3–10 min): leave a safe ledge with full energy, execute 
 
 | Stat | Drains | Restored by | At zero |
 |---|---|---|---|
-| **Health** | Threats, falls | Slow regen while food > 60%, later: medkits | Death → respawn at start/last base (keep inventory in v0.1; harsher later) |
+| **Health** | Threats, falls | Slow regen while food > 60%, later: medkits | Death → wake at the last base you stood in **[v0.2]** |
 | **Food** | Slowly over time | Eating skyberries, crafted rations | Health starts draining |
 | **Glove energy** | Climbing (per meter), hanging (trickle), harvesting from the wall | Slow regen on safe ground; fast near a fabricator/base | Detach from wall |
 
 Water/thirst is deliberately **not** in scope for now (one survival clock — food — plus the energy clock is enough pressure on mobile). Revisit later.
+
+**Death and loss [v0.2].** Dying scatters your **raw materials** into a cache at the spot you fell; crafted gear and permanent upgrades are never lost. You wake at the last base you actually stood in — not the nearest one to your body, because deaths are usually long falls and "nearest" would drag you back down past everything you built. The cache is marked on screen (with an edge pointer when off screen) and recovered by touching it. This is the Subnautica retrieval-dive inverted: the run back to your stuff is a *climb*, made with an empty pack, and it's some of the best tension in the game. Bases exist partly to make it optional — stash before you push higher.
 
 ### 4.3 Harvesting **[v0.1]**
 
@@ -122,11 +124,14 @@ Base (at a placed base, with Mk2 built):
 Reach is gated by energy ceiling and glide tech, not by artificial walls:
 `bare gloves → Glider → Battery Mk1 → first base + Mk2 → Battery Mk2 → Band 2 tech (wind gear) → …`
 
-## 7. Bases **[v0.1: first pass]**
+## 7. Bases **[v0.2]**
 
-- A **base kit** places a small platform on flat ground **or bolted to a cliff face** — cliff-side bases are the signature move (v0.1: ground/ledge placement; wall-mount placement next).
-- A base provides: **fast energy recharge** in its radius, a **respawn point**, and a socket to build a **Fabricator Mk2**.
-- Later: storage, beds (time skip?), farming planters on the wall, beacons visible from far islands, modular expansion like Subnautica corridors — but hanging.
+- A **base kit** places a small platform on flat ground **or bolts straight onto a cliff face** while you're hanging there. Cliff-side bases are the signature move: a wall base extends a **deck you can stand on**, converting any blank rock face into a rest stop, recharge point and supply dump.
+- A base provides: **fast energy recharge** in its radius, **storage**, a **respawn point**, and a socket to build a **Fabricator Mk2**.
+- Bases in range get their own on-screen button rather than sharing the harvest button — standing on a resource node must never hide your own front door.
+- Later: beds (time skip?), farming planters on the wall, beacons visible from far islands, modular expansion like Subnautica corridors — but hanging.
+
+**Why this is the heart of the game.** A cliff base turns a one-shot energy budget into a staged expedition: climb, bolt in, stash, recharge, climb again. It's the sky equivalent of dropping a Seabase halfway down a trench, and it's what makes the higher bands survivable without simply inflating the battery.
 
 ## 8. Threats
 
@@ -160,19 +165,25 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each version ships with in-game changelog notes. Rough roadmap:
 
 - **0.1 — First Climb** *(this build)*: core movement (walk/climb/glide), energy, vitals, harvest, personal fabricator, 4 recipes, base kit + Mk2 teaser, 2 threats, 2 islands, version/changelog UI.
-- **0.2 — Homestead**: cliff-wall base placement, storage, respawn at base, save game (localStorage), tuning from playtest.
+- **0.2 — Homestead** *(current build)*: cliff-wall base placement with standable decks, base storage, material-drop death with recoverable caches, respawn at last base, autosave to localStorage, cheaper idle hang.
 - **0.3 — The Shear**: Band 2, wind during glides, new materials + wind-tech recipes.
 - **0.4 — Alive Sky**: creature AI pass, nests, day/night, ambient life.
 - **0.5 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
 
-## 12. Open design questions (for Kalle)
+## 12. Design questions
 
-1. **Energy regen while hanging still** — currently a trickle *drain*. Alternative: zero drain when still, so hanging is a safe "hold position" state. Which feels better?
-2. **Death penalty** — v0.1 keeps inventory on death. Subnautica-style "drop materials where you died" creates great retrieval climbs. When do we turn that on?
+### Settled
+
+1. **Energy while hanging still** — kept as a drain, but cut to roughly 1/s in v0.2. Zero drain would have made the wall a couch; this keeps the oxygen analogy while letting you stop and plan. *Revisit if playtests show people still rushing routes.*
+2. **Death penalty** — on as of v0.2: raw materials drop into a recoverable cache, gear and upgrades never do. Retrieval climbs are too good to leave on the table, and capping the loss at materials keeps it from feeling punitive.
+
+### Still open (for Kalle)
+
 3. **Personal fabricator scope** — should it work *while hanging on a wall* (craft a ration mid-climb)? Currently yes. Too forgiving?
 4. **Thirst** — permanently out, or a high-band pressure (thin air = water need)?
 5. **Glide energy** — gliding is free (altitude is the cost). Should powered maneuvers (a flap/boost) exist and draw glove energy?
 6. **World structure** — hand-authored islands (current) vs. procedural bands with authored landmarks?
+7. **Cliff base density** — nothing currently stops you bolting a base every 200m up a face and trivialising the climb. Options: base kits stay expensive, a minimum spacing rule, or higher bands physically reject anchors (storm-brittle rock) so the top of the game is earned in one push.
 
 ---
 

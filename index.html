@@ -28,6 +28,7 @@
 <div id="stick-zone"><div id="stick-base"><div id="stick-nub"></div></div></div>
 
 <div id="action-buttons">
+  <button class="abtn hidden" id="btn-base" type="button"><span class="abtn-icon"></span></button>
   <button class="abtn" id="btn-pack" type="button"><span class="abtn-icon"></span></button>
   <button class="abtn" id="btn-interact" type="button"><span class="abtn-icon"></span><svg class="abtn-ring" viewBox="0 0 72 72"><circle cx="36" cy="36" r="33"></circle></svg></button>
   <button class="abtn big" id="btn-jump" type="button"><span class="abtn-icon"></span></button>
@@ -47,6 +48,9 @@
   <div class="panel">
     <div class="panel-head"><span class="panel-icon" id="base-icon"></span><h2 id="base-title">Base</h2><button class="close-btn" data-close type="button">&times;</button></div>
     <p class="panel-note" id="base-note"></p>
+    <h3>Storage <button id="btn-deposit" class="mini-btn" type="button">Deposit all</button></h3>
+    <div id="base-store" class="inv-grid"></div>
+    <h3>Fabricate</h3>
     <div id="base-recipe-list" class="recipe-list"></div>
   </div>
 </div>
@@ -55,6 +59,8 @@
   <div class="panel">
     <div class="panel-head"><span class="panel-icon" id="cl-icon"></span><h2>Skyreach — builds</h2><button class="close-btn" data-close type="button">&times;</button></div>
     <div id="changelog-body"></div>
+    <p class="panel-note">Progress saves to this device automatically.</p>
+    <button id="btn-reset" class="mini-btn danger" type="button">Wipe save &amp; restart</button>
     <p class="panel-note">Icons by <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> contributors (CC BY 3.0).</p>
   </div>
 </div>

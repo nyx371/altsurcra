@@ -1,8 +1,22 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.1.1';
+const GAME_VERSION = '0.2.0';
 
 const CHANGELOG = [
+  {
+    version: '0.2.0',
+    name: 'Homestead',
+    date: '2026-07-26',
+    notes: [
+      'Bolt bases straight onto cliff faces — open your Pack while gripping the wall and place a Base kit',
+      'Cliff bases extend a deck you can stand on, turning any wall into a rest stop',
+      'Storage at every base: deposit all, take back what you need',
+      'Death now scatters your raw materials into a recoverable cache — climb back for them',
+      'Upgrades and gear are never lost on death; you respawn at the nearest base',
+      'Progress saves to your device automatically; wipe it from the changelog panel',
+      'Hanging still on a wall costs far less energy — stop and plan your route',
+    ],
+  },
   {
     version: '0.1.1',
     name: 'Steady Hands',
