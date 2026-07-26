@@ -20,7 +20,7 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Climb down from a top | hold down | S / down |
 | Jump · hold to glide (needs Glider) | right big button | Space |
 | Harvest / catch a lizard (hold) · Glove pulse (tap, once crafted) | hand button | E |
-| Jetpack thrust (hold, once crafted) | thruster button | Shift |
+| Jetpack thrust (tap to toggle, once crafted) | thruster button | Shift |
 | Let go of the wall | release button (appears while climbing) | Q |
 | Range visor: zoom way out (once crafted) | binocular button | V |
 | Enter base | house button (appears in range) | E |
@@ -42,6 +42,8 @@ Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to
 Fabricators pool materials from your pack **and** the storage of any base you're standing in, so you never have to shuttle rocks out of a chest you're next to.
 
 **Thermals** — faint columns of rising air between islands — lift you *upward* while gliding, and the Thermal wing rides them hard. **Ridgerunners** patrol island tops and charge: barely any damage, but the shove will put you over an edge.
+
+Going sideways pays too: **outposts** sit far east and west of the main chain, each with dense resources, wildlife and a sealed **relic**. Relics are permanent — never lost on death — and buy the **Relic compass** (arrows to relics you haven't found) and the **Relic core**, the top energy tier.
 
 Progress autosaves to your device.
 

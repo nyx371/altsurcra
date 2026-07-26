@@ -1,8 +1,21 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.6.0';
+const GAME_VERSION = '0.7.0';
 
 const CHANGELOG = [
+  {
+    version: '0.7.0',
+    name: 'Wayfarer',
+    date: '2026-07-26',
+    notes: [
+      'Outposts far out to the left and right: dense resources, wildlife and a sealed relic on each',
+      'Relics are permanent trophies (never lost on death) and buy the Relic compass and Relic core (320 energy)',
+      'The world no longer stops at an invisible wall — the walkable area now spans everything generated',
+      'Jetpack is a toggle, not a hold; it cuts out on landing, on grabbing rock, and when the tank runs dry',
+      'Buttons sit in a fixed grid: hand and jump never move, let-go and thruster stack above jump',
+      'Vital bars stay visible and legible while a menu is open',
+    ],
+  },
   {
     version: '0.6.0',
     name: 'The Shear',

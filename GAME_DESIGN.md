@@ -45,7 +45,7 @@ Session shape (target 3–10 min): leave a safe ledge with full energy, execute 
 - **Detach**: jump off the wall for a shove, or use the **dedicated let-go button [v0.6]** — it appears only while you're gripping and drops you straight down with no sideways push. Jumping off and *choosing to fall* are different intentions and now have different buttons; on a wall over a long drop the difference matters.
 - **Glide** (requires crafted Glider): hold the glide button while airborne to deploy. Slow descent, good horizontal speed, steerable. Gliding costs nothing — altitude is the currency you spend.
 - **Double jump [v0.5]**: Spring boots give one extra mid-air jump (~+80px). Cheap, always available, no resource — it makes ordinary terrain traversal feel good and softens missed hops.
-- **Jetpack [v0.5]**: a short burst of powered lift on **its own button and its own small fuel bar** — deliberately *not* the glide button and *not* glove energy. Jet fuel only refills on solid ground, so it is an escape hatch and a reach-extender, not flight: about 1.3s of thrust at first (Ripwing jets roughly doubles it). Keeping it on a separate tank means using it never eats the energy you need to finish a climb — the two resources answer different questions ("can I get up this wall?" vs "can I save this fall?").
+- **Jetpack [v0.5, toggle since v0.7]**: powered lift on **its own button and its own small fuel bar**. It **latches**: one tap on, one tap off — holding a thruster while also steering and gliding was a three-thumb problem on a phone. It cuts out by itself when the tank empties, when you land, and when you grab rock, so it can never quietly drain while you are doing something else. Otherwise it is a short burst — deliberately *not* the glide button and *not* glove energy. Jet fuel only refills on solid ground, so it is an escape hatch and a reach-extender, not flight: about 1.3s of thrust at first (Ripwing jets roughly doubles it). Keeping it on a separate tank means using it never eats the energy you need to finish a climb — the two resources answer different questions ("can I get up this wall?" vs "can I save this fall?").
 - **Falling** onto rock from height causes damage. Falling off the bottom of the world into the cloud sea is death (later: recoverable with a late-game item).
 
 ### 4.2 Vitals **[v0.1]**
@@ -91,6 +91,14 @@ This makes "which nodes do I take on this energy budget" the moment-to-moment de
 ### 5.1 Structure
 
 A vertical archipelago of floating islands in loose **altitude bands**. Higher bands = richer materials, harsher threats, and (later) environmental hazards. Islands within a band are reachable by gliding; moving *up* a band always requires climbing something.
+
+**Going sideways [v0.7].** The chain climbs, but **outposts** generate far out to the left and right of it at easy altitudes — three or four per world, hundreds of metres past the last island of the main chain. Each carries a dense node cluster, wildlife, a ridgerunner, a return thermal so it is never a one-way trip, and a **sealed relic**.
+
+This exists because the pillars pull hard toward "only up", and a world where the only correct direction is up stops being a world and becomes a ladder. Outposts make *what's over there?* pay as reliably as *what's up there?*, and because they sit at gentle altitudes they're reachable early — a horizontal expedition is the natural thing to do when a vertical one is still out of your gear range.
+
+**Relics.** One per outpost, opened by hand in ~1.6s. Opening one pays a supply cache (ore, crystal, fiber, stone) plus the relic itself, which is a **permanent trophy: never lost on death, never spent by accident**. Relics buy two things at a Mk2 base — the **Relic compass** (screen-edge arrows with distances to relics you haven't opened, which turns the visor into a genuine exploration tool) and the **Relic core** (max energy 320, the highest tier in the game). Gating the top energy tier behind horizontal travel means the deepest vertical push is *paid for* by exploring sideways.
+
+**World bounds [v0.7].** The walkable area is computed from the generated islands plus a margin, and may extend west of x=0. Previously it stopped at a fixed line that generation had already outgrown — you could see islands you were not allowed to reach.
 
 **Remixed worlds [v0.3].** The world is generated from a seed on every new game: island sizes, cliff heights, shelf and node placement, nests, patrol routes and lizards all reroll, while the generator guarantees the spine — a safe granite start island with several practice cliffs, glide-reachable gaps, enough early ore/crystal to reach each gear tier, and a storm-rock summit spike at the end of the chain. Open-world posture: no goal ticker, no tutorial popups; names and labels live in the pack and base menus. The seed is stored in the save, so resuming keeps your world and wiping remixes it.
 
@@ -205,10 +213,11 @@ Both respawn on a timer (90s) at their home spot, so a patch of wall or sky is a
 
 Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band 2 (environmental threat), an apex "leviathan of the sky" whose shadow crossing the sun is the fear beat — the Reaper equivalent. TBD with design input.
 
-## 9. Controls (mobile) **[v0.1]**
+## 9. Controls (mobile) **[v0.1, layout fixed in v0.7]**
 
 - **Left thumb:** virtual joystick — walk, steer climbs, steer glides.
-- **Right thumb:** three buttons — **Jump/Glide** (hold to glide), **Interact/Harvest** (hold), **Pack** (crafting + inventory overlay).
+- **Right thumb:** a **fixed 3x3 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot), **Jump/Glide**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
+- **Vital bars sit above the menus [v0.7]**, with a dark backing while one is open — you decide what to eat or craft *because* of what your health and energy say, so hiding them behind the pack was backwards.
 - Keyboard supported for desktop playtesting: WASD/arrows, Space (jump/hold to glide), E (interact), C (pack).
 - Portrait and landscape both work; canvas scales to viewport.
 
@@ -228,9 +237,10 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.3 — Open Sky**: non-blocking climbable cliff *faces* (walk past, grab anywhere, free 2D wall movement, climb down from tops), seeded world remix per run, rock tiers gated by gear (granite/basalt/storm rock), Glove pulse defense, neutral cliff lizards, tutorial layer removed.
 - **0.4 — Ground Up**: climbing must be crafted, jumpable hills and stepped shelves, percentage death toll after a grace period (no world caches), playtest cheats, compact inventory.
 - **0.5 — Livestock**: pooled crafting across pack and nearby base storage, catchable respawning lizards and sky trout as recipe inputs, jetpack + Ripwing jets on a separate fuel bar, Spring boots (double jump), Scale armor, health kits, bats replace vultures.
-- **0.6 — The Shear** *(current build)*: thermals and the Thermal wing, ridgerunners, dedicated let-go button, Range visor, bottom-anchored menu close, iOS long-press hardening.
-- **0.7 — Alive Sky**: predator/prey ecology (bats hunting trout?), nests, day/night, scannable life, horizontal wind shear during glides.
-- **0.8 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
+- **0.6 — The Shear**: thermals and the Thermal wing, ridgerunners, dedicated let-go button, Range visor, bottom-anchored menu close, iOS long-press hardening.
+- **0.7 — Wayfarer** *(current build)*: outposts and relics rewarding horizontal travel, world bounds that follow generation, jetpack as a toggle, fixed button grid, vitals above menus.
+- **0.8 — Alive Sky**: predator/prey ecology (bats hunting trout?), nests, day/night, scannable life, horizontal wind shear during glides.
+- **0.9 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
 
 ## 12. Design questions
 

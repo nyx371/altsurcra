@@ -72,6 +72,7 @@ const T = {
   pulseCost: 12,
   pulseRadius: 130,
   captureTime: 1.1,
+  relicTime: 1.6,
   critterRespawn: 90,
   jumpVel2: 500,          // second (boot) jump
   jetThrust: 1750,        // upward accel while thrusting
@@ -91,6 +92,7 @@ const T = {
   runnerKnock: 430,
 };
 
+// Relics are deliberately absent: they are exploration trophies, never lost on death.
 const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'basekit'];
 
 // The sky is gentle for your first few falls; after that every death costs you a cut.
@@ -120,10 +122,13 @@ const NODE_TYPES = {
   crystal: { name: 'Sky crystal', icon: 'crystal-growth', item: 'crystal', yield: 2, respawn: 150, color: '#6be2ff' },
 };
 
+// left/right are recomputed from the generated islands, so the walkable area always
+// hugs the actual world instead of stopping at an arbitrary invisible line.
 const WORLD = { left: 20, right: 4000, top: 300, cloudSea: 2880, kill: 2960 };
+const GEN_SPAN = 7200; // how wide generation is allowed to spread
 
 let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [], skyfish = [];
-let thermals = [], runners = [];
+let thermals = [], runners = [], relics = [];
 let CAMP = { x: 300, y: 2500 };
 let worldSeed = 0;
 
@@ -134,7 +139,7 @@ function generateWorld(seed) {
   const RI = (a, b) => Math.floor(R(a, b + 1));
 
   rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = []; skyfish = [];
-  thermals = []; runners = [];
+  thermals = []; runners = []; relics = [];
 
   const addCliff = (x, y, w, h, type, taper) => {
     const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type, taper: taper || 0 };
@@ -241,7 +246,7 @@ function generateWorld(seed) {
     const slabW = R(280, 470);
     const slabTop = clamp(launch.top + R(140, 250), WORLD.top + 700, 2650);
     let x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW;
-    if (x < 80 || x + slabW > WORLD.right - 120) { dir = -dir; x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW; }
+    if (x < 80 || x + slabW > GEN_SPAN - 120) { dir = -dir; x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW; }
     const slab = addCliff(x, slabTop, slabW, Math.min(R(240, 380), WORLD.cloudSea - 90 - slabTop), type, R(120, 180));
 
     // a hill or two on the deck of each island, so there is scrambling everywhere
@@ -327,7 +332,49 @@ function generateWorld(seed) {
   addThermal(sx + startW + R(60, 170), groundY - R(500, 800), groundY + 120);
   addThermal(spike.x + spike.w / 2 + R(-190, 190), spike.y - R(80, 220), spike.y + spikeH * 0.8);
 
+  // --- outposts: the reward for going sideways instead of up ---
+  // The main chain climbs; these sit out on the flanks at easy altitudes, so the
+  // question "what's over there?" pays as well as "what's up there?".
+  const chainLeft = Math.min(...rocks.map(r => r.x));
+  const chainRight = Math.max(...rocks.map(r => r.x + r.w));
+  const nOutposts = RI(3, 4);
+  for (let i = 0; i < nOutposts; i++) {
+    const goRight = i % 2 === 0;
+    const step = 1 + Math.floor(i / 2);
+    const ow = R(300, 480);
+    const ox = goRight
+      ? chainRight + R(420, 700) * step
+      : chainLeft - R(420, 700) * step - ow;
+    const oy = clamp(groundY - R(-160, 520), WORLD.top + 900, WORLD.cloudSea - 420);
+    const island = addCliff(ox, oy, ow, R(200, 300), rnd() < 0.5 ? 'granite' : 'basalt', R(110, 190));
+
+    // worth the trip: a dense node cluster, a relic, wildlife and a way home
+    addNode('berry', ox + ow * R(0.15, 0.4), oy);
+    addNode('berry', ox + ow * R(0.6, 0.85), oy);
+    faceNode('ore', island); faceNode('crystal', island);
+    faceNode(rnd() < 0.5 ? 'fiber' : 'stone', island);
+    if (rnd() < 0.7) {
+      const tw = R(90, 150), th = R(180, 300);
+      const tower = addCliff(ox + R(20, Math.max(30, ow - tw - 20)), oy - th, tw, th, island.type, 0);
+      faceNode('crystal', tower);
+      ledgeOn(tower);
+      addLizard(tower);
+    }
+    relics.push({ x: Math.round(ox + ow / 2), y: Math.round(oy - 22), taken: false });
+    addLizard(island);
+    addRunner(island);
+    for (let k = 0; k < 2; k++) addSkyfish(ox + R(-160, ow + 160), oy - R(60, 320));
+    // a thermal on the way back, so an outpost is not a one-way trip
+    addThermal(goRight ? ox - R(80, 220) : ox + ow + R(80, 220), oy - R(400, 650), oy + 160);
+    if (rnd() < 0.6) {
+      stingwings.push({ nest: { x: island.x + ow / 2, y: oy + 60 }, x: island.x + ow / 2, y: oy + 60, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0 });
+    }
+  }
+
   WORLD.top = Math.min(...rocks.map(r => r.y)) - 500;
+  // negative coordinates are fine — outposts spread west of the start island
+  WORLD.left = Math.min(...rocks.map(r => r.x)) - 420;
+  WORLD.right = Math.max(...rocks.map(r => r.x + r.w)) + 420;
   void lastTower;
 }
 
@@ -343,6 +390,7 @@ const ITEMS = {
   crystal: { name: 'Sky crystal',  icon: 'crystal-growth' },
   lizard:  { name: 'Cliff lizard', icon: 'gecko' },
   skyfish: { name: 'Sky trout',    icon: 'flying-trout' },
+  relic:   { name: 'Relic',        icon: 'emerald' },
   basekit: { name: 'Base kit',     icon: 'house', place: true },
 };
 
@@ -364,6 +412,8 @@ const RECIPES = [
   { id: 'armor',    tier: 'mk2',      name: 'Scale armor',       icon: 'armor-vest',      cost: { lizard: 4, ore: 4, fiber: 3 },     desc: 'Take much less damage.', flag: 'armor', once: true },
   { id: 'battery2', tier: 'mk2',      name: 'Battery Mk2',       icon: 'battery-pack',    cost: { ore: 4, crystal: 4 },              desc: 'Energy → 220.', flag: 'battery2', once: true, needs: 'battery1' },
   { id: 'magnets',  tier: 'mk2',      name: 'Resonant magnets',  icon: 'magnet',          cost: { ore: 2, crystal: 5, skyfish: 2 },  desc: 'Climb storm rock.', flag: 'magnets', once: true, needs: 'spikes' },
+  { id: 'compass',  tier: 'mk2',      name: 'Relic compass',     icon: 'compass',         cost: { relic: 1, crystal: 3 },            desc: 'Points to relics you have not found.', flag: 'compass', once: true },
+  { id: 'relicbat', tier: 'mk2',      name: 'Relic core',        icon: 'emerald',         cost: { relic: 3, ore: 6, crystal: 6 },    desc: 'Max energy → 320. Needs Battery Mk2.', flag: 'relicbat', once: true, needs: 'battery2' },
 ];
 
 // ---------- state ----------
@@ -383,13 +433,15 @@ const player = {
 
 function maxFuel() { return flags.jetpack2 ? T.jetFuel2 : flags.jetpack ? T.jetFuel1 : 0; }
 
-const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, basekit: 0 };
+const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, relic: 0, basekit: 0 };
 const flags = {
   gloves: false, glider: false, boots: false, pulse: false,
   battery1: false, battery2: false, spikes: false, magnets: false,
   jetpack: false, jetpack2: false, armor: false, visor: false, thermal: false,
+  compass: false, relicbat: false,
 };
 let visorOn = false;
+let jetOn = false;
 const bases = [];   // {x, y, mk2, wall, store:{}, deck:rect}
 let deaths = 0;
 let paused = false;
@@ -495,7 +547,21 @@ function bindHold(el, prop) {
 }
 bindHold(btnJump, 'jump');
 bindHold(btnInteract, 'interact');
-bindHold(btnJet, 'jet');
+btnJet.addEventListener('click', toggleJet);
+
+// The jetpack latches on: holding a button while also steering and gliding was a
+// three-thumb problem on a phone. It cuts out on its own when the tank runs dry.
+function toggleJet() {
+  if (!flags.jetpack) return;
+  if (!jetOn && player.fuel <= 0) { toast('Tank empty — land to refuel', 'bad', 'fuel-tank'); return; }
+  jetOn = !jetOn;
+  btnJet.classList.toggle('on', jetOn);
+}
+function jetOff() {
+  if (!jetOn) return;
+  jetOn = false;
+  btnJet.classList.remove('on');
+}
 btnPack.addEventListener('click', () => togglePack());
 btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBase(b); });
 btnRelease.addEventListener('click', releaseClimb);
@@ -515,6 +581,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyC') togglePack();
   if (e.code === 'KeyQ') releaseClimb();
   if (e.code === 'KeyV') toggleVisor();
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleJet();
   if (e.code === 'Escape') closeOverlays();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -531,7 +598,7 @@ function pollInput() {
   input.y = clamp(ky + jy, -1, 1);
   input.jumpHeld = btnState.jump || !!keys.Space;
   input.interactHeld = btnState.interact || !!keys.KeyE;
-  input.jetHeld = btnState.jet || !!keys.ShiftLeft || !!keys.ShiftRight;
+  input.jetHeld = jetOn;
 }
 
 // ---------- physics ----------
@@ -589,6 +656,7 @@ function tryGrab() {
   const r = faceAt(player.x + P_W / 2, player.y + P_H / 2);
   if (!r) return false;
   if (!canClimb(r)) { gripFeedback(r); return false; }
+  jetOff(); // grabbing rock ends the burn
   player.state = 'climb';
   player.climbRect = r;
   player.vx = 0; player.vy = 0;
@@ -729,6 +797,7 @@ function updatePlayer(dt) {
       player.vy = Math.max(player.vy - T.jetThrust * dt, -T.jetRiseCap);
       player.state = 'air';
       player.jumps = Math.max(player.jumps, 1);
+      if (player.fuel <= 0) { jetOff(); toast('Tank dry', 'bad', 'fuel-tank'); }
     }
     // reach up to grab a face while falling or gliding past it
     if (input.y < -0.4 && tryGrab()) return;
@@ -751,6 +820,7 @@ function updatePlayer(dt) {
     if (zone) lastSafe = zone;
     player.jumps = 0;
     player.fuel = Math.min(maxFuel(), player.fuel + T.jetRefill * dt);
+    jetOff(); // landing always cuts the thruster
   }
   player.energy = clamp(player.energy, 0, player.maxEnergy);
 }
@@ -793,6 +863,7 @@ function die(cause) {
       ? 'Nothing lost. ' + grace + ' more forgiving ' + (grace === 1 ? 'fall' : 'falls') + '.'
       : 'Nothing on you to lose.';
   document.getElementById('overlay-death').classList.remove('hidden');
+  document.body.classList.add('menu-open');
   saveGame();
 }
 
@@ -808,6 +879,7 @@ function respawn() {
   player.state = 'air';
   player.climbRect = null;
   document.getElementById('overlay-death').classList.add('hidden');
+  document.body.classList.toggle('menu-open', anyOverlayOpen());
   paused = anyOverlayOpen();
   saveGame();
 }
@@ -836,6 +908,12 @@ function nearestNode() {
     if (d < bd) { bd = d; best = n; }
   }
   return best;
+}
+
+function nearestRelic() {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  for (const r of relics) if (!r.taken && dist(px, py, r.x, r.y) < 62) return r;
+  return null;
 }
 
 // Live critters you can grab by hand. They come back after a while.
@@ -891,11 +969,25 @@ function updateInteraction(dt) {
     if (dist(pc.x, pc.y, critter.c.x, critter.c.y) < dist(pc.x, pc.y, node.x, node.y)) node = null;
     else critter = null;
   }
+  const relic = nearestRelic();
+  if (relic) { node = null; critter = null; } // a relic always wins the hand
 
   // a tap of the hand doubles as the pulse when something is on you
   if (input.interactPressed && flags.pulse && threatInRange(T.pulseRadius)) firePulse();
 
-  if (input.interactHeld && critter) {
+  if (input.interactHeld && relic) {
+    if (!player.harvest || player.harvest.relic !== relic) player.harvest = { relic, t: 0, total: T.relicTime };
+    player.harvest.t += dt;
+    if (player.harvest.t >= T.relicTime) {
+      relic.taken = true;
+      player.harvest = null;
+      const haul = { ore: 6, crystal: 5, fiber: 4, stone: 4 };
+      for (const [k, v] of Object.entries(haul)) inv[k] += v;
+      inv.relic += 1;
+      toast('Relic recovered — and a cache of supplies', 'good', 'emerald');
+      saveGame();
+    }
+  } else if (input.interactHeld && critter) {
     if (!player.harvest || player.harvest.critter !== critter.c) player.harvest = { critter: critter.c, t: 0, total: T.captureTime };
     player.harvest.t += dt;
     if (player.harvest.t >= T.captureTime) {
@@ -931,7 +1023,7 @@ function updateInteraction(dt) {
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
   const prog = player.harvest ? player.harvest.t / player.harvest.total : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
-  btnInteract.classList.toggle('glide-ready', !!node || !!critter);
+  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic);
   btnBase.classList.toggle('hidden', !nearestBase());
   btnJet.classList.toggle('hidden', !flags.jetpack);
   btnRelease.classList.toggle('hidden', player.state !== 'climb');
@@ -1171,6 +1263,8 @@ function craft(recipe, base) {
   if (recipe.id === 'jetpack2') { flags.jetpack2 = true; player.fuel = maxFuel(); toast('Ripwing jets — bigger tank', 'good', 'thrust'); }
   if (recipe.id === 'visor') { flags.visor = true; toast('Range visor — tap to look far', 'good', 'binoculars'); }
   if (recipe.id === 'thermal') { flags.thermal = true; toast('Thermal wing — ride the updrafts', 'good', 'windy-stripes'); }
+  if (recipe.id === 'compass') { flags.compass = true; toast('Relic compass — unfound relics now show', 'good', 'compass'); }
+  if (recipe.id === 'relicbat') { flags.relicbat = true; player.maxEnergy = 320; player.energy = 320; toast('Relic core — 320 energy', 'good', 'emerald'); }
   if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated', 'good', 'hang-glider'); }
   if (recipe.id === 'pulse') { flags.pulse = true; toast('Glove pulse armed', 'good', 'spiky-explosion'); }
   if (recipe.id === 'spikes') { flags.spikes = true; toast('Grip spikes fitted', 'good', 'spikes'); }
@@ -1277,6 +1371,7 @@ function saveGame() {
         x: player.x, y: player.y, hp: player.hp, food: player.food,
         energy: player.energy, maxEnergy: player.maxEnergy, fuel: player.fuel,
       },
+      relics: relics.map(r => !!r.taken),
       lizards: lizards.map(l => Math.max(0, l.goneUntil - gameTime)),
       skyfish: skyfish.map(f => Math.max(0, f.goneUntil - gameTime)),
       inv, flags,
@@ -1312,6 +1407,7 @@ function loadGame() {
   lastSafe = li >= 0 && bases[li] ? bases[li] : CAMP;
   deaths = data.deaths || 0;
   if (data.nodes) NODES.forEach((n, i) => { n.depletedUntil = gameTime + (data.nodes[i] || 0); });
+  if (data.relics) relics.forEach((r, i) => { r.taken = !!data.relics[i]; });
   if (data.lizards) lizards.forEach((l, i) => { l.goneUntil = gameTime + (data.lizards[i] || 0); });
   if (data.skyfish) skyfish.forEach((f, i) => { f.goneUntil = gameTime + (data.skyfish[i] || 0); });
   player.fuel = clamp(player.fuel || 0, 0, maxFuel());
@@ -1331,11 +1427,13 @@ function anyOverlayOpen() {
 }
 function openOverlay(id) {
   document.getElementById(id).classList.remove('hidden');
+  document.body.classList.add('menu-open');
   paused = true;
 }
 function closeOverlays() {
   if (deathCause) return;
   document.querySelectorAll('.overlay').forEach(o => o.classList.add('hidden'));
+  document.body.classList.remove('menu-open');
   paused = false;
 }
 document.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', closeOverlays));
@@ -1434,6 +1532,10 @@ const CHEATS = {
   critters() {
     inv.lizard += 10; inv.skyfish += 10;
     toast('+10 lizards, +10 trout', 'good', 'cage');
+  },
+  relics() {
+    inv.relic += 3;
+    toast('+3 relics', 'good', 'emerald');
   },
   kit() {
     inv.basekit += 3;
@@ -1728,6 +1830,28 @@ function render() {
   }
 
 
+  // relics: the payoff for going sideways
+  for (const rl of relics) {
+    if (rl.taken) {
+      drawIcon(ctx, 'open-treasure-chest', rl.x, rl.y, 26, '#6c7a99', 0.55);
+      continue;
+    }
+    const bob = Math.sin(gameTime * 1.8 + rl.x) * 3;
+    ctx.save();
+    ctx.globalAlpha = 0.3 + Math.sin(gameTime * 2.5 + rl.x) * 0.12;
+    ctx.fillStyle = '#7dffb0';
+    ctx.beginPath(); ctx.arc(rl.x, rl.y + bob, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    drawIcon(ctx, 'ancient-ruins', rl.x, rl.y + 8 + bob, 40, '#4c6a5a', 0.9);
+    drawIcon(ctx, 'locked-chest', rl.x, rl.y + bob, 26, '#7dffb0');
+    if (player.harvest && player.harvest.relic === rl) {
+      ctx.strokeStyle = '#7dffb0'; ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(rl.x, rl.y + bob, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (player.harvest.t / player.harvest.total));
+      ctx.stroke();
+    }
+  }
+
   // nodes
   const active = nearestNode();
   for (const n of NODES) {
@@ -1844,6 +1968,29 @@ function render() {
   }
 
   ctx.restore();
+
+  // relic compass: screen-edge arrows toward relics you have not opened yet
+  if (flags.compass) {
+    for (const rl of relics) {
+      if (rl.taken) continue;
+      const s = w2s(rl.x, rl.y);
+      const m = 46;
+      const onScreen = s.x > m && s.x < cw - m && s.y > m && s.y < chh - m;
+      if (onScreen) continue;
+      const px = clamp(s.x, m, cw - m), py = clamp(s.y, m, chh - m);
+      const far = Math.round(dist(player.x, player.y, rl.x, rl.y) / 10);
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = 'rgba(10,16,36,0.72)';
+      ctx.beginPath(); ctx.arc(px, py, 19, 0, Math.PI * 2); ctx.fill();
+      drawIcon(ctx, 'emerald', px, py - 2, 19, '#7dffb0');
+      ctx.fillStyle = '#7dffb0';
+      ctx.font = '600 9px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(far + 'm', px, py + 15);
+      ctx.restore();
+    }
+  }
 
   // visor tint, so the pulled-back view reads as looking through something
   if (visorOn && flags.visor) {
@@ -2002,7 +2149,7 @@ initClouds();
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — The Shear', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Wayfarer', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -2023,9 +2170,12 @@ window.SKYREACH = {
   get skyfish() { return skyfish; },
   get thermals() { return thermals; },
   get runners() { return runners; },
+  get relics() { return relics; },
+  get jetOn() { return jetOn; },
+  get world() { return WORLD; },
   get visorOn() { return visorOn; },
   get scale() { return scale; },
-  maxFuel, releaseClimb, toggleVisor,
+  maxFuel, releaseClimb, toggleVisor, toggleJet,
   get camp() { return CAMP; },
   get seed() { return worldSeed; },
   getLastSafe: () => lastSafe,

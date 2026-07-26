@@ -2,6 +2,15 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.7.0 — Wayfarer (2026-07-26)
+
+- Outposts far out to the left and right: dense resources, wildlife and a sealed relic on each
+- Relics are permanent trophies (never lost on death) and buy the Relic compass and Relic core (320 energy)
+- The world no longer stops at an invisible wall — the walkable area now spans everything generated
+- Jetpack is a toggle, not a hold; it cuts out on landing, on grabbing rock, and when the tank runs dry
+- Buttons sit in a fixed grid: hand and jump never move, let-go and thruster stack above jump
+- Vital bars stay visible and legible while a menu is open
+
 ## v0.6.0 — The Shear (2026-07-26)
 
 - Thermals: glide into a rising column to gain altitude for free — the Thermal wing rides them hard
