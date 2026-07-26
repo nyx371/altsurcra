@@ -45,6 +45,10 @@ Fabricators pool materials from your pack **and** the storage of any base you're
 
 Going sideways pays too: **outposts** sit far east and west of the main chain, each with dense resources, wildlife and a sealed **relic**. Relics are permanent — never lost on death — and buy the **Relic compass** (arrows to relics you haven't found) and the **Relic core**, the top energy tier.
 
+**Day and night** turn every five minutes: after dark the nightwings hunt harder and thermals go weak, so sleep it off at a base or gear up for it. **Storms** bring wind that shoves you mid-glide and lightning that hunts anything high and exposed — climb, shelter, or build the Storm suit.
+
+Build a **Field scanner** and hold the hand on anything new to fill an 11-entry field log. Rob stingwing nests for eggs (the resident wakes up angry). **Skysteel** on the highest faces unlocks **Fabricator Mk3**, and with it the Storm suit, the Ascender rig, and the **Signal beacon** — carry that to the highest rock in the world to finish the run.
+
 Progress autosaves to your device.
 
 ## Credits

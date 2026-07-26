@@ -72,6 +72,7 @@ const T = {
   pulseCost: 12,
   pulseRadius: 130,
   captureTime: 1.1,
+  eggTime: 0.8,
   relicTime: 1.6,
   critterRespawn: 90,
   jumpVel2: 500,          // second (boot) jump
@@ -90,10 +91,40 @@ const T = {
   runnerCharge: 275,
   runnerDamage: 6,
   runnerKnock: 430,
+  dayLength: 300,         // seconds for a full day/night turn
+  nightStart: 0.72,       // fraction of the cycle where dusk begins
+  nightEnd: 0.97,
+  stormEvery: 150,        // average gap between storms
+  stormLength: 52,
+  stormWarn: 9,
+  windMax: 260,           // horizontal push while airborne in a storm
+  boltAltitude: 1500,     // above this y-line, storms throw lightning
+  boltDamage: 22,
+  boltEvery: 4.5,
+  scanTime: 1.3,
+  eggFood: 25,
+  climbBonusAscender: 1.6,
 };
 
+// Everything you can point the scanner at. Completing the log is the run's
+// long-form collectible and unlocks the summit beacon.
+const CODEX = {
+  granite:   { name: 'Granite',      icon: 'stone-block',     note: 'Old, dense, and generous. Bare gloves bite it fine.' },
+  basalt:    { name: 'Basalt',       icon: 'stone-block',     note: 'Cooled in columns. Too smooth for anything but spikes.' },
+  stormrock: { name: 'Storm rock',   icon: 'crystal-growth',  note: 'Holds a charge. Lightning finds it, and so do magnets.' },
+  lizard:    { name: 'Cliff lizard', icon: 'gecko',           note: 'Grips harder than you do, and knows it.' },
+  skyfish:   { name: 'Sky trout',    icon: 'flying-trout',    note: 'Rides the same updrafts you do. Schools thicken before a storm.' },
+  stingwing: { name: 'Stingwing',    icon: 'wasp-sting',      note: 'Nests on faces. Defends a radius, not a territory.' },
+  nightwing: { name: 'Nightwing',    icon: 'bat',             note: 'Hunts the gaps. Bolder after dark, and it knows when you are gliding.' },
+  runner:    { name: 'Ridgerunner',  icon: 'boar',            note: 'Will not leave its island. Would happily see you leave yours.' },
+  thermal:   { name: 'Thermal',      icon: 'windy-stripes',   note: 'Warm air off sunlit rock. Weaker at night, fierce in a storm.' },
+  relic:     { name: 'Relic vault',  icon: 'ancient-ruins',   note: 'Someone built up here before the islands drifted apart.' },
+  skysteel:  { name: 'Skysteel',     icon: 'metal-bar',       note: 'Only forms where the air thins. The islands are seeded with it.' },
+};
+const CODEX_KEYS = Object.keys(CODEX);
+
 // Relics are deliberately absent: they are exploration trophies, never lost on death.
-const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'basekit'];
+const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'egg', 'skysteel', 'basekit'];
 
 // The sky is gentle for your first few falls; after that every death costs you a cut.
 const FREE_DEATHS = 4;
@@ -120,6 +151,7 @@ const NODE_TYPES = {
   stone:   { name: 'Stone',       icon: 'stone-block',    item: 'stone',   yield: 2, respawn: 75,  color: '#c9c2b2' },
   ore:     { name: 'Iron ore',    icon: 'ore',            item: 'ore',     yield: 2, respawn: 120, color: '#ff9d6b' },
   crystal: { name: 'Sky crystal', icon: 'crystal-growth', item: 'crystal', yield: 2, respawn: 150, color: '#6be2ff' },
+  skysteel: { name: 'Skysteel',   icon: 'metal-bar',      item: 'skysteel', yield: 1, respawn: 210, color: '#dfe7f5' },
 };
 
 // left/right are recomputed from the generated islands, so the walkable area always
@@ -129,6 +161,7 @@ const GEN_SPAN = 7200; // how wide generation is allowed to spread
 
 let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [], skyfish = [];
 let thermals = [], runners = [], relics = [];
+let summit = null;
 let CAMP = { x: 300, y: 2500 };
 let worldSeed = 0;
 
@@ -276,12 +309,14 @@ function generateWorld(seed) {
     } else {
       faceNode('crystal', tower); faceNode('crystal', tower); faceNode('crystal', slab);
       faceNode('ore', tower);
+      faceNode('skysteel', tower);
+      if (rnd() < 0.6) faceNode('skysteel', slab);
     }
 
     // threats
     if (i >= 1 && rnd() < 0.75) {
       const nx = R(tower.x + 25, tower.x + tower.w - 25), ny = R(tower.y + 80, tower.y + th * 0.6);
-      stingwings.push({ nest: { x: nx, y: ny }, x: nx, y: ny, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0 });
+      stingwings.push({ nest: { x: nx, y: ny }, x: nx, y: ny, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0, eggs: RI(1, 2), eggBack: 0 });
     }
     if (rnd() < 0.8) {
       const gx0 = dir > 0 ? prevRight + 20 : x + slabW + 20;
@@ -322,6 +357,9 @@ function generateWorld(seed) {
   const spike = addCliff(launch.x - R(24, 40), launch.top - spikeH, R(52, 72), spikeH, 'stormrock', 0);
   addNode('crystal', spike.x + spike.w / 2, spike.y);
   faceNode('crystal', spike);
+  faceNode('skysteel', spike);
+  faceNode('skysteel', spike);
+  summit = { x: spike.x + spike.w / 2, y: spike.y };
   addLizard(spike);
   for (let k = 0; k < 2; k++) addSkyfish(spike.x + R(-220, 220), spike.y + R(60, 380));
 
@@ -367,8 +405,13 @@ function generateWorld(seed) {
     // a thermal on the way back, so an outpost is not a one-way trip
     addThermal(goRight ? ox - R(80, 220) : ox + ow + R(80, 220), oy - R(400, 650), oy + 160);
     if (rnd() < 0.6) {
-      stingwings.push({ nest: { x: island.x + ow / 2, y: oy + 60 }, x: island.x + ow / 2, y: oy + 60, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0 });
+      stingwings.push({ nest: { x: island.x + ow / 2, y: oy + 60 }, x: island.x + ow / 2, y: oy + 60, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0, eggs: RI(1, 2), eggBack: 0 });
     }
+  }
+
+  if (NODES.filter(n => n.type === 'skysteel').length < 4) {
+    const high = rocks.filter(r => r.h > 200 && !r.deck).sort((a, b) => a.y - b.y).slice(0, 3);
+    for (const r of high) { faceNode('skysteel', r); faceNode('skysteel', r); }
   }
 
   WORLD.top = Math.min(...rocks.map(r => r.y)) - 500;
@@ -390,6 +433,8 @@ const ITEMS = {
   crystal: { name: 'Sky crystal',  icon: 'crystal-growth' },
   lizard:  { name: 'Cliff lizard', icon: 'gecko' },
   skyfish: { name: 'Sky trout',    icon: 'flying-trout' },
+  egg:     { name: 'Wing egg',     icon: 'egg-clutch',     eat: T.eggFood },
+  skysteel:{ name: 'Skysteel',     icon: 'metal-bar' },
   relic:   { name: 'Relic',        icon: 'emerald' },
   basekit: { name: 'Base kit',     icon: 'house', place: true },
 };
@@ -398,6 +443,7 @@ const RECIPES = [
   { id: 'gloves',   tier: 'personal', name: 'Magnetic gloves',   icon: 'gloves',          cost: { fiber: 5, stone: 4 },              desc: 'Climb granite faces.', flag: 'gloves', once: true },
   { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },                        desc: '+35 food.' },
   { id: 'medkit',   tier: 'personal', name: 'Health kit',        icon: 'first-aid-kit',   cost: { fiber: 3, berry: 2 },              desc: '+45 health.' },
+  { id: 'scanner',  tier: 'personal', name: 'Field scanner',     icon: 'radar-sweep',     cost: { crystal: 2, fiber: 3 },            desc: 'Hold the hand on anything new to log it.', flag: 'scanner', once: true },
   { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 },              desc: 'Hold Jump to glide.', flag: 'glider', once: true },
   { id: 'boots',    tier: 'personal', name: 'Spring boots',      icon: 'boots',           cost: { lizard: 3, fiber: 4, stone: 2 },   desc: 'Double jump.', flag: 'boots', once: true },
   { id: 'pulse',    tier: 'personal', name: 'Glove pulse',       icon: 'spiky-explosion', cost: { crystal: 1, ore: 1 },              desc: 'Tap hand: blast creatures away.', flag: 'pulse', once: true },
@@ -414,6 +460,10 @@ const RECIPES = [
   { id: 'magnets',  tier: 'mk2',      name: 'Resonant magnets',  icon: 'magnet',          cost: { ore: 2, crystal: 5, skyfish: 2 },  desc: 'Climb storm rock.', flag: 'magnets', once: true, needs: 'spikes' },
   { id: 'compass',  tier: 'mk2',      name: 'Relic compass',     icon: 'compass',         cost: { relic: 1, crystal: 3 },            desc: 'Points to relics you have not found.', flag: 'compass', once: true },
   { id: 'relicbat', tier: 'mk2',      name: 'Relic core',        icon: 'emerald',         cost: { relic: 3, ore: 6, crystal: 6 },    desc: 'Max energy → 320. Needs Battery Mk2.', flag: 'relicbat', once: true, needs: 'battery2' },
+  { id: 'mk3',      tier: 'mk2',      name: 'Fabricator Mk3',    icon: 'anvil',           cost: { skysteel: 4, relic: 1, crystal: 8 }, desc: 'Unlocks summit-grade gear here.', flag: 'mk3', once: true },
+  { id: 'stormsuit', tier: 'mk3',     name: 'Storm suit',        icon: 'chest-armor',     cost: { skysteel: 5, lizard: 4, ore: 6 },   desc: 'Lightning cannot touch you. Heavy plating.', flag: 'stormsuit', once: true },
+  { id: 'ascender', tier: 'mk3',      name: 'Ascender rig',      icon: 'grapple',         cost: { skysteel: 5, crystal: 8, egg: 3 },  desc: 'Climb much faster for less energy.', flag: 'ascender', once: true },
+  { id: 'beaconkit', tier: 'mk3',     name: 'Signal beacon',     icon: 'lighthouse',      cost: { skysteel: 6, relic: 2, crystal: 10 }, desc: 'Carry it to the highest rock and answer the sky.', flag: 'beacon', once: true },
 ];
 
 // ---------- state ----------
@@ -433,21 +483,40 @@ const player = {
 
 function maxFuel() { return flags.jetpack2 ? T.jetFuel2 : flags.jetpack ? T.jetFuel1 : 0; }
 
-const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, relic: 0, basekit: 0 };
+const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, egg: 0, skysteel: 0, relic: 0, basekit: 0 };
 const flags = {
   gloves: false, glider: false, boots: false, pulse: false,
   battery1: false, battery2: false, spikes: false, magnets: false,
   jetpack: false, jetpack2: false, armor: false, visor: false, thermal: false,
   compass: false, relicbat: false,
+  scanner: false, mk3: false, stormsuit: false, ascender: false, beacon: false,
 };
 let visorOn = false;
 let jetOn = false;
+// world clock, weather and the field log
+let dayTime = 0.12;          // 0..1 through the day
+let stormTimer = 90;         // seconds until the next storm rolls in
+let stormLeft = 0;           // seconds of storm remaining
+let windX = 0;
+let boltTimer = 0;
+let boltFlash = 0;
+const scanned = {};          // codex key -> true
+let beaconLit = false;
+let runStats = { lit: 0 };
 const bases = [];   // {x, y, mk2, wall, store:{}, deck:rect}
 let deaths = 0;
 let paused = false;
 let gameTime = 0;
 let pulseFx = null; // {x, y, t}
-let jumpFx = null;  // double-jump puff
+let jumpFx = null;  // scanner sweep on the current target
+  if (player.harvest && player.harvest.scan) {
+    const pc2 = playerCenter();
+    const p2 = player.harvest.t / player.harvest.total;
+    ctx.strokeStyle = 'rgba(159,245,196,0.9)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(pc2.x, pc2.y, 26 + p2 * 30, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // double-jump puff
 
 let clouds = [];
 function initClouds() {
@@ -678,6 +747,75 @@ function releaseClimb() {
   player.harvest = null;
 }
 
+// ---------- world clock & weather ----------
+
+function nightAmount() {
+  // 0 by day, 1 at deep night, with soft dusk and dawn either side
+  const t = dayTime;
+  if (t < T.nightStart - 0.08) return t < 0.04 ? (0.04 - t) / 0.04 : 0;
+  if (t < T.nightStart) return (t - (T.nightStart - 0.08)) / 0.08;
+  if (t < T.nightEnd) return 1;
+  return Math.max(0, 1 - (t - T.nightEnd) / 0.03);
+}
+const isNight = () => nightAmount() > 0.5;
+const storming = () => stormLeft > 0;
+
+function updateWorldClock(dt) {
+  const wasNight = isNight();
+  dayTime = (dayTime + dt / T.dayLength) % 1;
+  if (!wasNight && isNight()) toast('Night falls — the gaps get dangerous', 'bad', 'moon');
+  if (wasNight && !isNight()) toast('Dawn', 'good', 'sun');
+
+  if (stormLeft > 0) {
+    stormLeft -= dt;
+    // wind swings slowly through the storm rather than sitting at one value
+    windX = Math.sin(gameTime * 0.35) * T.windMax * clamp(stormLeft / 6, 0, 1);
+    if (stormLeft <= 0) { windX = 0; toast('The wind drops', 'good', 'windy-stripes'); }
+  } else {
+    stormTimer -= dt;
+    if (stormTimer <= T.stormWarn && stormTimer + dt > T.stormWarn) {
+      toast('Storm front building', 'bad', 'lightning-storm');
+    }
+    if (stormTimer <= 0) {
+      stormLeft = T.stormLength;
+      stormTimer = T.stormEvery * (0.7 + Math.random() * 0.6);
+      boltTimer = T.boltEvery;
+      toast('Storm — mind the high rock', 'bad', 'lightning-storm');
+    }
+  }
+
+  // lightning hunts anything high and exposed while a storm runs
+  if (storming()) {
+    boltTimer -= dt;
+    if (boltTimer <= 0) {
+      boltTimer = T.boltEvery * (0.6 + Math.random() * 0.8);
+      const exposed = player.y < T.boltAltitude && player.state !== 'climb';
+      if (exposed && !flags.stormsuit && !deathCause) {
+        boltFlash = 0.35;
+        hurt(T.boltDamage, 'Struck out of the storm');
+        toast('Lightning!', 'bad', 'lightning-storm');
+      } else if (player.y < T.boltAltitude) {
+        boltFlash = 0.2;
+      }
+    }
+  }
+  boltFlash = Math.max(0, boltFlash - dt);
+}
+
+function restUntilDawn() {
+  if (player.food < 25) { toast('Too hungry to rest', 'bad', 'meat'); return; }
+  dayTime = 0.02;
+  stormLeft = 0; windX = 0;
+  stormTimer = Math.max(stormTimer, 40);
+  player.food = Math.max(0, player.food - 22);
+  player.energy = player.maxEnergy;
+  player.fuel = maxFuel();
+  player.hp = Math.min(100, player.hp + 25);
+  toast('Rested until dawn', 'good', 'bed');
+  closeOverlays();
+  saveGame();
+}
+
 function inThermal() {
   const cx = player.x + P_W / 2, cy = player.y + P_H / 2;
   for (const th of thermals) {
@@ -710,22 +848,25 @@ function updatePlayer(dt) {
   if (player.state === 'climb') {
     const r = player.climbRect;
     const movingMag = Math.hypot(input.x, input.y);
-    player.energy -= (movingMag > 0.1 ? T.climbDrainMove * Math.min(movingMag, 1) : T.climbDrainIdle) * dt;
+    // the ascender rig makes every part of a climb faster and cheaper
+    const climbBoost = flags.ascender ? T.climbBonusAscender : 1;
+    const drainScale = flags.ascender ? 0.75 : 1;
+    player.energy -= (movingMag > 0.1 ? T.climbDrainMove * Math.min(movingMag, 1) * drainScale : T.climbDrainIdle) * dt;
     if (player.energy <= 0) { player.energy = 0; detach(false); return; }
 
     // mantle over the top
-    if (input.y < -0.1 && player.y + P_H + input.y * T.climbSpeed * dt <= r.y + 10) {
+    if (input.y < -0.1 && player.y + P_H + input.y * T.climbSpeed * climbBoost * dt <= r.y + 10) {
       player.y = r.y - P_H;
       player.state = 'ground'; player.climbRect = null;
       player.vy = 0;
       return;
     }
 
-    player.x += input.x * T.climbSpeedX * dt;
+    player.x += input.x * T.climbSpeedX * climbBoost * dt;
     const cx = player.x + P_W / 2;
     if (cx < r.x - 4 || cx > r.x + r.w + 4) { detach(false); return; } // slid off the side
 
-    const landed = moveY(input.y * T.climbSpeed * dt);
+    const landed = moveY(input.y * T.climbSpeed * climbBoost * dt);
     if (landed) { player.state = 'ground'; player.climbRect = null; return; }
     if (player.y > r.y + r.h) { detach(false); return; } // off the bottom
 
@@ -778,7 +919,12 @@ function updatePlayer(dt) {
       if (!input.jumpHeld || !flags.glider) player.state = 'air';
       else {
         // rising air turns a glide into a climb — the only way up that costs nothing
-        const lift = inThermal() ? (flags.thermal ? T.thermalLiftWing : T.thermalLift) : T.glideFall;
+        let lift = T.glideFall;
+        if (inThermal()) {
+          lift = flags.thermal ? T.thermalLiftWing : T.thermalLift;
+          // sun-warmed rock drives thermals: weak at night, violent in a storm
+          lift *= storming() ? 1.35 : (1 - nightAmount() * 0.55);
+        }
         player.vy += (lift - player.vy) * clamp(4 * dt, 0, 1);
       }
     }
@@ -804,7 +950,9 @@ function updatePlayer(dt) {
   }
 
   const impactVy = player.vy;
-  player.x = clamp(player.x + player.vx * dt, WORLD.left, WORLD.right - P_W);
+  // storm wind shoves you around while you are off the rock
+  const drift = (player.state === 'air' || player.state === 'glide') ? windX * dt : 0;
+  player.x = clamp(player.x + player.vx * dt + drift, WORLD.left, WORLD.right - P_W);
 
   const landed = moveY(player.vy * dt);
   if (landed && player.state !== 'ground') {
@@ -831,7 +979,8 @@ let deathCause = null;
 
 function hurt(dmg, cause) {
   if (player.invuln > 0 || deathCause) return;
-  if (flags.armor) dmg *= (1 - T.armorSoak);
+  if (flags.stormsuit) dmg *= 0.4;
+  else if (flags.armor) dmg *= (1 - T.armorSoak);
   player.hp -= dmg;
   player.invuln = T.invulnTime;
   if (player.hp <= 0) die(cause || 'The sky took you');
@@ -910,6 +1059,50 @@ function nearestNode() {
   return best;
 }
 
+// What the scanner is pointed at right now — creatures first, then the rock itself.
+function scanTarget() {
+  if (!flags.scanner) return null;
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  const near = (x, y, r) => dist(px, py, x, y) < r;
+  for (const l of lizards) if (gameTime < l.goneUntil ? false : near(l.x, l.y, 90)) return 'lizard';
+  for (const f of skyfish) if (gameTime < f.goneUntil ? false : near(f.x, f.y, 120)) return 'skyfish';
+  for (const w of stingwings) if (near(w.x, w.y, 150)) return 'stingwing';
+  for (const b of razorbeaks) if (near(b.x, b.y, 170)) return 'nightwing';
+  for (const rr of runners) if (near(rr.x, rr.rock.y - 18, 150)) return 'runner';
+  for (const rl of relics) if (near(rl.x, rl.y, 120)) return 'relic';
+  if (inThermal()) return 'thermal';
+  const n = nearestNode();
+  if (n && n.type === 'skysteel') return 'skysteel';
+  const r = player.climbRect || faceAt(px, py) || standingOn();
+  if (r && !r.deck && CODEX[r.type]) return r.type;
+  return null;
+}
+
+function unscannedTarget() {
+  const t = scanTarget();
+  return t && !scanned[t] ? t : null;
+}
+
+function scanCount() { return CODEX_KEYS.filter(k => scanned[k]).length; }
+
+function recordScan(key) {
+  scanned[key] = true;
+  const n = scanCount();
+  toast('Logged: ' + CODEX[key].name + ' (' + n + '/' + CODEX_KEYS.length + ')', 'good', 'radar-sweep');
+  if (n === CODEX_KEYS.length) toast('Field log complete', 'good', 'open-book');
+  renderLog();
+  saveGame();
+}
+
+// A nest can be robbed, at a price: the resident wakes up angry.
+function nearestNest() {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  for (const w of stingwings) {
+    if (w.eggs > 0 && gameTime > (w.eggBack || 0) && dist(px, py, w.nest.x, w.nest.y) < 58) return w;
+  }
+  return null;
+}
+
 function nearestRelic() {
   const px = player.x + P_W / 2, py = player.y + P_H / 2;
   for (const r of relics) if (!r.taken && dist(px, py, r.x, r.y) < 62) return r;
@@ -970,7 +1163,10 @@ function updateInteraction(dt) {
     else critter = null;
   }
   const relic = nearestRelic();
-  if (relic) { node = null; critter = null; } // a relic always wins the hand
+  const nest = relic ? null : nearestNest();
+  const scan = (relic || nest) ? null : unscannedTarget();
+  if (relic || nest) { node = null; critter = null; }
+  if (scan) { node = null; critter = null; } // logging something new comes first
 
   // a tap of the hand doubles as the pulse when something is on you
   if (input.interactPressed && flags.pulse && threatInRange(T.pulseRadius)) firePulse();
@@ -986,6 +1182,27 @@ function updateInteraction(dt) {
       inv.relic += 1;
       toast('Relic recovered — and a cache of supplies', 'good', 'emerald');
       saveGame();
+    }
+  } else if (input.interactHeld && nest) {
+    if (!player.harvest || player.harvest.nest !== nest) player.harvest = { nest, t: 0, total: T.eggTime };
+    player.harvest.t += dt;
+    if (player.harvest.t >= T.eggTime) {
+      nest.eggs -= 1;
+      nest.eggBack = gameTime + 150;
+      inv.egg += 1;
+      player.harvest = null;
+      // robbing a nest is never free
+      nest.mode = 'chase'; nest.stun = 0; nest.hitCd = 0.4;
+      toast('Egg taken — it saw you', 'bad', 'egg-clutch');
+      saveGame();
+    }
+  } else if (input.interactHeld && scan) {
+    if (!player.harvest || player.harvest.scan !== scan) player.harvest = { scan, t: 0, total: T.scanTime };
+    player.harvest.t += dt;
+    if (player.harvest.t >= T.scanTime) {
+      const key = player.harvest.scan;
+      player.harvest = null;
+      recordScan(key);
     }
   } else if (input.interactHeld && critter) {
     if (!player.harvest || player.harvest.critter !== critter.c) player.harvest = { critter: critter.c, t: 0, total: T.captureTime };
@@ -1023,7 +1240,8 @@ function updateInteraction(dt) {
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
   const prog = player.harvest ? player.harvest.t / player.harvest.total : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
-  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic);
+  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic || !!nest || !!scan);
+  btnInteract.classList.toggle('scanning', !!scan && !relic && !nest);
   btnBase.classList.toggle('hidden', !nearestBase());
   btnJet.classList.toggle('hidden', !flags.jetpack);
   btnRelease.classList.toggle('hidden', player.state !== 'climb');
@@ -1081,14 +1299,16 @@ function updateRazorbeaks(dt) {
       b.y = b.anchor.y + Math.sin(b.t * 1.1) * 16;
       if (b.x < b.anchor.x0) b.dir = 1;
       if (b.x > b.anchor.x1) b.dir = -1;
-      if (airborne && dToPlayer < 270 && b.cd <= 0 && !deathCause) { b.mode = 'swoop'; b.swoopT = 0; }
+      const reach = 270 * (1 + nightAmount() * 0.55);
+      if (airborne && dToPlayer < reach && b.cd <= 0 && !deathCause) { b.mode = 'swoop'; b.swoopT = 0; }
     } else if (b.mode === 'swoop') {
       b.swoopT += dt;
       const ang = Math.atan2(pc.y - b.y, pc.x - b.x);
       b.vx = (b.vx || 0) + Math.cos(ang) * 600 * dt;
       b.vy = (b.vy || 0) + Math.sin(ang) * 600 * dt;
       const sp = Math.hypot(b.vx, b.vy);
-      if (sp > 330) { b.vx *= 330 / sp; b.vy *= 330 / sp; }
+      const cap = 330 * (1 + nightAmount() * 0.25);
+      if (sp > cap) { b.vx *= cap / sp; b.vy *= cap / sp; }
       b.x += b.vx * dt; b.y += b.vy * dt;
       b.dir = b.vx > 0 ? 1 : -1;
       if (dToPlayer < 30) {
@@ -1263,6 +1483,11 @@ function craft(recipe, base) {
   if (recipe.id === 'jetpack2') { flags.jetpack2 = true; player.fuel = maxFuel(); toast('Ripwing jets — bigger tank', 'good', 'thrust'); }
   if (recipe.id === 'visor') { flags.visor = true; toast('Range visor — tap to look far', 'good', 'binoculars'); }
   if (recipe.id === 'thermal') { flags.thermal = true; toast('Thermal wing — ride the updrafts', 'good', 'windy-stripes'); }
+  if (recipe.id === 'scanner') { flags.scanner = true; toast('Scanner online — hold the hand on anything new', 'good', 'radar-sweep'); }
+  if (recipe.id === 'mk3') { if (base) base.mk3 = true; flags.mk3 = true; toast('Fabricator Mk3 online', 'good', 'anvil'); }
+  if (recipe.id === 'stormsuit') { flags.stormsuit = true; toast('Storm suit — lightning cannot reach you', 'good', 'chest-armor'); }
+  if (recipe.id === 'ascender') { flags.ascender = true; toast('Ascender rig — the wall got shorter', 'good', 'grapple'); }
+  if (recipe.id === 'beaconkit') { flags.beacon = true; toast('Beacon built — take it to the highest rock', 'good', 'lighthouse'); }
   if (recipe.id === 'compass') { flags.compass = true; toast('Relic compass — unfound relics now show', 'good', 'compass'); }
   if (recipe.id === 'relicbat') { flags.relicbat = true; player.maxEnergy = 320; player.energy = 320; toast('Relic core — 320 energy', 'good', 'emerald'); }
   if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated', 'good', 'hang-glider'); }
@@ -1299,6 +1524,27 @@ function makeWallDeck(base) {
   rocks.push(deck);
   base.deck = deck;
   return deck;
+}
+
+// The run's finish line: carry the beacon to the highest rock and switch it on.
+function lightBeacon() {
+  if (!flags.beacon || beaconLit) return;
+  const on = standingOn();
+  const highest = summit ? summit.y : Math.min(...rocks.map(r => r.y));
+  if (!on || player.state !== 'ground' || on.y > highest + 30) {
+    toast('Take it to the highest rock you can find', 'bad', 'lighthouse');
+    return;
+  }
+  closeOverlays();
+  beaconLit = true;
+  runStats.lit += 1;
+  document.getElementById('win-stats').textContent =
+    'Relics recovered ' + inv.relic + '  ·  Field log ' + scanCount() + '/' + CODEX_KEYS.length +
+    '  ·  Falls survived ' + deaths;
+  document.getElementById('overlay-win').classList.remove('hidden');
+  document.body.classList.add('menu-open');
+  paused = true;
+  saveGame();
 }
 
 function placeBase() {
@@ -1372,10 +1618,12 @@ function saveGame() {
         energy: player.energy, maxEnergy: player.maxEnergy, fuel: player.fuel,
       },
       relics: relics.map(r => !!r.taken),
+      dayTime, stormTimer, stormLeft, scanned, beaconLit, runStats,
+      nests: stingwings.map(w => ({ e: w.eggs, b: Math.max(0, (w.eggBack || 0) - gameTime) })),
       lizards: lizards.map(l => Math.max(0, l.goneUntil - gameTime)),
       skyfish: skyfish.map(f => Math.max(0, f.goneUntil - gameTime)),
       inv, flags,
-      bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, wall: !!b.wall, store: b.store || {} })),
+      bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, mk3: !!b.mk3, wall: !!b.wall, store: b.store || {} })),
       lastSafe: bases.indexOf(lastSafe),
       deaths,
       nodes: NODES.map(n => Math.max(0, n.depletedUntil - gameTime)),
@@ -1399,7 +1647,7 @@ function loadGame() {
 
   bases.length = 0;
   for (const b of data.bases || []) {
-    const base = { x: b.x, y: b.y, mk2: !!b.mk2, wall: !!b.wall, store: b.store || {} };
+    const base = { x: b.x, y: b.y, mk2: !!b.mk2, mk3: !!b.mk3, wall: !!b.wall, store: b.store || {} };
     if (base.wall) makeWallDeck(base);
     bases.push(base);
   }
@@ -1408,6 +1656,17 @@ function loadGame() {
   deaths = data.deaths || 0;
   if (data.nodes) NODES.forEach((n, i) => { n.depletedUntil = gameTime + (data.nodes[i] || 0); });
   if (data.relics) relics.forEach((r, i) => { r.taken = !!data.relics[i]; });
+  if (typeof data.dayTime === 'number') dayTime = data.dayTime;
+  if (typeof data.stormTimer === 'number') stormTimer = data.stormTimer;
+  stormLeft = data.stormLeft || 0;
+  beaconLit = !!data.beaconLit;
+  runStats = data.runStats || { lit: 0 };
+  for (const k of CODEX_KEYS) delete scanned[k];
+  if (data.scanned) for (const k of CODEX_KEYS) if (data.scanned[k]) scanned[k] = true;
+  if (data.nests) stingwings.forEach((w, i) => {
+    if (!data.nests[i]) return;
+    w.eggs = data.nests[i].e; w.eggBack = gameTime + (data.nests[i].b || 0);
+  });
   if (data.lizards) lizards.forEach((l, i) => { l.goneUntil = gameTime + (data.lizards[i] || 0); });
   if (data.skyfish) skyfish.forEach((f, i) => { f.goneUntil = gameTime + (data.skyfish[i] || 0); });
   player.fuel = clamp(player.fuel || 0, 0, maxFuel());
@@ -1504,7 +1763,13 @@ function renderPack() {
     const use = (def.eat || def.heal) ? () => useItem(id) : def.place ? placeBase : null;
     grid.appendChild(invTile(id, def, inv[id], use, def.heal ? 'Use' : def.eat ? 'Eat' : 'Place'));
   }
+  if (flags.beacon && !beaconLit) {
+    const el = invTile('beacon', { name: 'Signal beacon', icon: 'lighthouse' }, 1, lightBeacon, 'Raise');
+    grid.appendChild(el);
+    any = true;
+  }
   if (!any) grid.innerHTML = '<div class="inv-empty">Empty</div>';
+  renderLog();
 
   const list = document.getElementById('recipe-list');
   list.innerHTML = '';
@@ -1536,6 +1801,24 @@ const CHEATS = {
   relics() {
     inv.relic += 3;
     toast('+3 relics', 'good', 'emerald');
+  },
+  steel() {
+    inv.skysteel += 8; inv.egg += 4;
+    toast('+8 skysteel, +4 eggs', 'good', 'metal-bar');
+  },
+  scans() {
+    flags.scanner = true;
+    for (const k of CODEX_KEYS) scanned[k] = true;
+    renderLog();
+    toast('Field log filled', 'good', 'open-book');
+  },
+  storm() {
+    stormLeft = T.stormLength; stormTimer = T.stormEvery; boltTimer = 1.5;
+    toast('Storm summoned', 'bad', 'lightning-storm');
+  },
+  night() {
+    dayTime = isNight() ? 0.1 : 0.8;
+    toast(isNight() ? 'Night' : 'Day', 'good', isNight() ? 'moon' : 'sun');
   },
   kit() {
     inv.basekit += 3;
@@ -1585,6 +1868,40 @@ function renderBase(base) {
     list.appendChild(recipeRow(RECIPES.find(r => r.id === 'mk2'), base));
   } else {
     for (const r of RECIPES) if (r.tier === 'mk2') list.appendChild(recipeRow(r, base));
+    if (base.mk3) for (const r of RECIPES) if (r.tier === 'mk3') list.appendChild(recipeRow(r, base));
+  }
+  const rest = document.getElementById('btn-rest');
+  rest.disabled = player.food < 25;
+  rest.textContent = isNight() ? 'Sleep until dawn' : 'Rest here';
+  rest.onclick = restUntilDawn;
+}
+
+// ---------- field log ----------
+
+function renderLog() {
+  const n = scanCount();
+  const done = n === CODEX_KEYS.length;
+  const summary = document.getElementById('log-summary');
+  if (summary) {
+    summary.textContent = flags.scanner
+      ? 'Logged ' + n + ' of ' + CODEX_KEYS.length + (done ? ' — complete.' : '.')
+      : 'Build a Field scanner to start logging what lives up here.';
+  }
+  const prog = document.getElementById('log-progress');
+  if (prog) prog.textContent = 'Logged ' + n + ' of ' + CODEX_KEYS.length + (done ? ' — complete.' : '');
+  const list = document.getElementById('log-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const key of CODEX_KEYS) {
+    const def = CODEX[key];
+    const got = !!scanned[key];
+    const el = document.createElement('div');
+    el.className = 'log-entry' + (got ? '' : ' unknown');
+    el.innerHTML = '<span class="l-icon">' + svgIcon(got ? def.icon : 'radar-sweep') + '</span>' +
+      '<div><div class="l-name"></div><div class="l-note"></div></div>';
+    el.querySelector('.l-name').textContent = got ? def.name : 'Unlogged';
+    el.querySelector('.l-note').textContent = got ? def.note : 'Scan one to fill this in.';
+    list.appendChild(el);
   }
 }
 
@@ -1611,6 +1928,12 @@ document.getElementById('version-badge').addEventListener('click', () => {
 });
 
 document.getElementById('btn-respawn').addEventListener('click', respawn);
+document.getElementById('btn-open-log').addEventListener('click', () => { renderLog(); openOverlay('overlay-log'); });
+document.getElementById('btn-win-close').addEventListener('click', () => {
+  document.getElementById('overlay-win').classList.add('hidden');
+  document.body.classList.toggle('menu-open', anyOverlayOpen());
+  paused = anyOverlayOpen();
+});
 
 const resetBtn = document.getElementById('btn-reset');
 resetBtn.addEventListener('click', () => {
@@ -1641,6 +1964,8 @@ document.querySelector('#btn-jump .abtn-icon').innerHTML = svgIcon('jump-across'
 document.getElementById('pack-icon').innerHTML = svgIcon('gear-hammer');
 document.getElementById('base-icon').innerHTML = svgIcon('house');
 document.getElementById('cl-icon').innerHTML = svgIcon('mountain-climbing');
+document.getElementById('log-icon').innerHTML = svgIcon('open-book');
+document.getElementById('win-icon').innerHTML = svgIcon('lighthouse');
 
 function updateHUD() {
   document.querySelector('#bar-health .bar-fill').style.width = player.hp + '%';
@@ -1658,6 +1983,21 @@ function updateHUD() {
     fuelBar.classList.toggle('warn', player.fuel < maxFuel() * 0.2);
   }
   btnJet.classList.toggle('glide-ready', flags.jetpack && player.fuel > 0);
+
+  // weather + clock strip under the bars
+  const w = document.getElementById('weather');
+  const night = isNight(), storm = storming();
+  const wState = (night ? 'n' : 'd') + (storm ? 's' : '') + (storm ? Math.round(windX / 60) : '');
+  if (w.dataset.state !== wState) {
+    w.dataset.state = wState;
+    let html = '<span class="w-icon ' + (night ? 'w-night' : '') + '">' + svgIcon(night ? 'moon' : 'sun') + '</span>';
+    if (storm) {
+      html += '<span class="w-icon w-storm">' + svgIcon('lightning-storm') + '</span>' +
+        '<span class="w-icon w-storm" style="transform:scaleX(' + (windX >= 0 ? 1 : -1) + ')">' + svgIcon('windy-stripes') + '</span>';
+    }
+    w.innerHTML = html;
+    w.classList.toggle('hidden', !night && !storm);
+  }
 
   const jumpIcon = document.querySelector('#btn-jump .abtn-icon');
   const want = (player.state === 'glide' || (flags.glider && player.state === 'air')) ? 'hang-glider' : 'jump-across';
@@ -1686,11 +2026,26 @@ resize();
 
 function skyColor(y) {
   const t = clamp((y - 700) / 1900, 0, 1);
-  const top = [To(11, 21, 48), To(120, 150, 205)];
-  const bot = [To(38, 60, 110), To(215, 190, 170)];
-  function To(r, g, b) { return { r, g, b }; }
-  function mix(a, b, k) { return 'rgb(' + Math.round(lerp(a.r, b.r, k)) + ',' + Math.round(lerp(a.g, b.g, k)) + ',' + Math.round(lerp(a.b, b.b, k)) + ')'; }
-  return [mix(top[0], top[1], t), mix(bot[0], bot[1], t)];
+  const To = (r, g, b) => ({ r, g, b });
+  const mixc = (a, b, k) => To(lerp(a.r, b.r, k), lerp(a.g, b.g, k), lerp(a.b, b.b, k));
+  const out = c => 'rgb(' + Math.round(c.r) + ',' + Math.round(c.g) + ',' + Math.round(c.b) + ')';
+
+  let top = mixc(To(11, 21, 48), To(120, 150, 205), t);
+  let bot = mixc(To(38, 60, 110), To(215, 190, 170), t);
+  // dusk warms the horizon, night drains it to indigo
+  const n = nightAmount();
+  if (n > 0) {
+    const dusk = n < 1 ? Math.sin(n * Math.PI) : 0;
+    top = mixc(top, To(6, 9, 26), n);
+    bot = mixc(bot, To(14, 18, 44), n);
+    bot = mixc(bot, To(120, 68, 78), dusk * 0.5);
+  }
+  if (storming()) {
+    const k = clamp(stormLeft / 6, 0, 1) * 0.55;
+    top = mixc(top, To(48, 50, 62), k);
+    bot = mixc(bot, To(78, 80, 92), k);
+  }
+  return [out(top), out(bot)];
 }
 
 function w2s(x, y) { return { x: (x - cam.x) * scale + cw / 2, y: (y - cam.y) * scale + chh / 2 }; }
@@ -1758,8 +2113,9 @@ function render() {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, cw, chh);
 
-  if (cam.y < 1500) {
-    const a = clamp((1500 - cam.y) / 900, 0, 0.8);
+  const starA = Math.max(clamp((1500 - cam.y) / 900, 0, 0.8), nightAmount() * 0.85);
+  if (starA > 0.02) {
+    const a = starA;
     ctx.fillStyle = 'rgba(255,255,255,' + a + ')';
     for (let i = 0; i < 40; i++) {
       const sx = ((i * 733) % 1000) / 1000 * cw;
@@ -1852,6 +2208,27 @@ function render() {
     }
   }
 
+  // nest eggs
+  for (const w of stingwings) {
+    if (w.eggs > 0 && gameTime > (w.eggBack || 0)) {
+      drawIcon(ctx, 'egg-clutch', w.nest.x, w.nest.y + 12, 20, '#f0e2c0', 0.9);
+    }
+  }
+
+  // the lit beacon
+  if (beaconLit && summit) {
+    const pulse = 0.5 + Math.sin(gameTime * 3) * 0.3;
+    ctx.save();
+    ctx.globalAlpha = pulse * 0.5;
+    const bg = ctx.createRadialGradient(summit.x, summit.y - 40, 10, summit.x, summit.y - 40, 340);
+    bg.addColorStop(0, 'rgba(255,215,107,0.9)');
+    bg.addColorStop(1, 'rgba(255,215,107,0)');
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.arc(summit.x, summit.y - 40, 340, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    drawIcon(ctx, 'lighthouse', summit.x, summit.y - 34, 46, '#ffd76b');
+  }
+
   // nodes
   const active = nearestNode();
   for (const n of NODES) {
@@ -1912,6 +2289,14 @@ function render() {
     ctx.beginPath();
     ctx.arc(c.x, c.y, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (player.harvest.t / player.harvest.total));
     ctx.stroke();
+  }
+
+  // scanner sweep on the current target
+  if (player.harvest && player.harvest.scan) {
+    const pc2 = playerCenter();
+    const p2 = player.harvest.t / player.harvest.total;
+    ctx.strokeStyle = 'rgba(159,245,196,0.9)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(pc2.x, pc2.y, 26 + p2 * 30, 0, Math.PI * 2); ctx.stroke();
   }
 
   // double-jump puff
@@ -1990,6 +2375,25 @@ function render() {
       ctx.fillText(far + 'm', px, py + 15);
       ctx.restore();
     }
+  }
+
+  // storm: driving gusts across the screen, plus the flash of a strike
+  if (storming()) {
+    const k = clamp(stormLeft / 6, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = 0.16 * k;
+    ctx.strokeStyle = '#dce6ff'; ctx.lineWidth = 2;
+    const dirW = windX >= 0 ? 1 : -1;
+    for (let i = 0; i < 26; i++) {
+      const gx = ((i * 197 + gameTime * (240 + Math.abs(windX)) * dirW) % (cw + 260)) - 130;
+      const gy = (i * 137) % chh;
+      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + 46 * dirW, gy + 12); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (boltFlash > 0) {
+    ctx.fillStyle = 'rgba(255,255,255,' + (boltFlash * 0.75) + ')';
+    ctx.fillRect(0, 0, cw, chh);
   }
 
   // visor tint, so the pulled-back view reads as looking through something
@@ -2100,9 +2504,39 @@ function frame(now) {
   last = now;
 
   pollInput();
+  try {
+    step(dt);
+  } catch (err) {
+    // A thrown frame used to kill requestAnimationFrame outright and freeze the
+    // game with no feedback. Keep the loop alive and surface it once instead.
+    if (!frame.warned) {
+      frame.warned = true;
+      console.error('Skyreach frame error:', err);
+      toast('Something glitched — still running', 'bad', 'spiky-explosion');
+    }
+  }
+  input.jumpPressed = false;
+  input.interactPressed = false;
+
+  // the visor pulls the camera way back so you can read a route before committing
+  const wantScale = baseScale * (visorOn && flags.visor ? T.visorZoom : 1);
+  scale = lerp(scale, wantScale, clamp(6 * dt, 0, 1));
+
+  const targetX = clamp(player.x + P_W / 2, WORLD.left, WORLD.right);
+  const targetY = clamp(player.y, WORLD.top, WORLD.cloudSea + 60 - chh / scale / 2);
+  cam.x = lerp(cam.x, targetX, clamp(6 * dt, 0, 1));
+  cam.y = lerp(cam.y, targetY, clamp(6 * dt, 0, 1));
+
+  render();
+  updateHUD();
+  requestAnimationFrame(frame);
+}
+
+function step(dt) {
   if (!paused) {
     gameTime += dt;
     updatePlayer(dt);
+    updateWorldClock(dt);
     updateVitals(dt);
     updateInteraction(dt);
     updateStingwings(dt);
@@ -2119,21 +2553,6 @@ function frame(now) {
     autosaveTimer -= dt;
     if (autosaveTimer <= 0) { autosaveTimer = 20; saveGame(); }
   }
-  input.jumpPressed = false;
-  input.interactPressed = false;
-
-  // the visor pulls the camera way back so you can read a route before committing
-  const wantScale = baseScale * (visorOn && flags.visor ? T.visorZoom : 1);
-  scale = lerp(scale, wantScale, clamp(6 * dt, 0, 1));
-
-  const targetX = clamp(player.x + P_W / 2, 0, WORLD.right);
-  const targetY = clamp(player.y, WORLD.top, WORLD.cloudSea + 60 - chh / scale / 2);
-  cam.x = lerp(cam.x, targetX, clamp(6 * dt, 0, 1));
-  cam.y = lerp(cam.y, targetY, clamp(6 * dt, 0, 1));
-
-  render();
-  updateHUD();
-  requestAnimationFrame(frame);
 }
 
 // ---------- boot ----------
@@ -2149,7 +2568,7 @@ initClouds();
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Wayfarer', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Long Night', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -2172,6 +2591,15 @@ window.SKYREACH = {
   get runners() { return runners; },
   get relics() { return relics; },
   get jetOn() { return jetOn; },
+  get dayTime() { return dayTime; }, set dayTime(v) { dayTime = v; },
+  get storming() { return stormLeft > 0; },
+  get windX() { return windX; },
+  get scanned() { return scanned; },
+  get beaconLit() { return beaconLit; },
+  get summit() { return summit; },
+  set stormLeft(v) { stormLeft = v; },
+  set stormTimer(v) { stormTimer = v; },
+  isNight, lightBeacon, restUntilDawn,
   get world() { return WORLD; },
   get visorOn() { return visorOn; },
   get scale() { return scale; },

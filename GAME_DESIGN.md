@@ -62,6 +62,19 @@ Water/thirst is deliberately **not** in scope for now (one survival clock — fo
 
 *Why this replaced the v0.2 corpse-run:* retrieval climbs sounded great on paper, but they punish the player twice — once for dying, again with a mandatory backtrack up terrain they'd already solved. A percentage toll keeps death meaningful without ever making you re-climb for a bag. The grace period matters too: the first hour is when you're still learning that energy runs out, and taxing that is just noise. Bases and storage stay valuable because 25% of a big haul hurts, so stashing before a hard push is still the smart play.
 
+### 4.3⅛ The world clock and weather **[v0.8]**
+
+**Day and night** turn on a 5-minute cycle. The sky shifts through dusk to indigo, stars come out, and two systems change with it: **nightwings hunt harder** (wider detection, faster dives) and **thermals go weak** — they are sun-warmed air, so after dark the free ride mostly stops. Night is not a fail state, it is a *cost change*: the cheap way up closes and the sky gets teeth, so you either provision for it or sleep through it.
+
+**Sleeping** at a base skips to dawn for 22 food, and restores energy, jet fuel and some health. That makes a base a place you *use*, not just a locker, and gives food a second job beyond the starvation clock.
+
+**Storms** roll in every few minutes for about 50 seconds. They bring:
+- **Wind** that shoves anything airborne sideways (up to 260px/s, swinging through the storm). Mid-glide this is genuinely dangerous — a gap you measured in calm air is a different gap now.
+- **Lightning** that strikes anything high and exposed (above the storm line, not gripping rock). It hurts a lot; the **Storm suit** makes you immune.
+- **Stronger thermals** (+35%). The storm is the best and worst time to be in the air, which is exactly the tension we want: the fastest ascent in the game is also the one that can kill you.
+
+The counterplay is layered: hug the rock (climbing is safe from bolts), wait it out at a base, or gear past it with the Storm suit.
+
 ### 4.3¼ Thermals **[v0.6]**
 
 Columns of rising air stand in the gaps between islands and beside the summit spike. Glide into one and you **gain** altitude instead of spending it (~115px/s; the **Thermal wing** more than doubles that). They're drawn as faint updraft motes that go gold when you're inside one.
@@ -159,7 +172,7 @@ Base (at a placed base, with Mk2 built):
 ### 6.4 Progression skeleton
 
 Reach is gated by grip, energy ceiling and air tech, not by artificial walls:
-`bare hands (hills only) → Magnetic gloves → Glider → Spring boots → Range visor → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → …`
+`bare hands (hills only) → Magnetic gloves → Glider → Spring boots → Field scanner → Range visor → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
 
 Three separate ways to gain height now exist and they cost different things: **climbing** spends glove energy, the **jetpack** spends its own fuel, and **thermals** cost nothing but require you to be in the right place. That spread is deliberate — it keeps "how do I get up there?" an interesting question at every tier.
 
@@ -182,6 +195,18 @@ The pack carries a **Playtest** row: +20 materials, +3 base kits, unlock all gea
 
 **Why this is the heart of the game.** A cliff base turns a one-shot energy budget into a staged expedition: climb, bolt in, stash, recharge, climb again. It's the sky equivalent of dropping a Seabase halfway down a trench, and it's what makes the higher bands survivable without simply inflating the battery.
 
+## 7½. The field log **[v0.8]**
+
+The **Field scanner** is a cheap early craftable. Hold the hand on anything you have not logged — a rock type, a creature, a thermal, a relic vault — and it goes into an 11-entry **field log** with a line of flavour that is also a hint (*"Schools thicken before a storm"*, *"Lightning finds it, and so do magnets"*).
+
+This is the Subnautica databank, and it does three jobs: it gives the open world something to *complete* now that the goal ticker is gone, it teaches systems through observation rather than tutorial text, and it makes stopping to look at things a rewarded action in a game otherwise about spending energy efficiently. Progress shows in the pack; the log is its own panel.
+
+## 7¾. Ending a run **[v0.8]**
+
+**Skysteel** only forms on the highest faces. It unlocks **Fabricator Mk3** at a base, which builds the three summit items: **Storm suit** (lightning immunity, heavy damage soak), **Ascender rig** (60% faster climbing at 25% less energy per metre), and the **Signal beacon**.
+
+Carry the beacon to the highest rock in the world and raise it: the sky answers, and the run gets a closing screen with your relics, log completion and falls survived. The world stays open afterwards — this is a summit, not a credits roll. It gives a seeded run a shape (arrive, survive, equip, climb, answer) without ever forcing a critical path.
+
 ## 8. Threats
 
 Threat design rule: threats attack your *position and energy*, not just your health bar. Getting knocked off a wall at low energy is scarier than the damage itself.
@@ -194,6 +219,7 @@ Threat design rule: threats attack your *position and energy*, not just your hea
 
 ### 8.1¼ Ground threat **[v0.6]**
 
+- **Nest robbing [v0.8]**: stingwing nests hold 1–2 eggs. Taking one is quick (0.8s) but wakes the resident instantly and cancels any stun on it, so the practical route is *pulse it, rob it, and be somewhere else*. Eggs are good food and feed the Ascender rig.
 - **Ridgerunner** (boar icon): patrols an island top on foot. When it spots you standing on its island it lowers its head and charges. The hit does almost nothing (6 damage) — **the shove is the weapon**: a hard horizontal launch that puts you in the air, and the danger is entirely what's behind you. On a wide island it's a nuisance; two steps from a 2000px drop it's lethal.
 
 It never leaves its own island, so a charge is survivable if you read the ground and give yourself room, and it's the first threat that makes *where you stand* matter on flat terrain rather than on a wall. Counterplay: jump it, out-walk the cooldown, hop onto a hill it can't reach you on, or pulse it.
@@ -239,8 +265,9 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.5 — Livestock**: pooled crafting across pack and nearby base storage, catchable respawning lizards and sky trout as recipe inputs, jetpack + Ripwing jets on a separate fuel bar, Spring boots (double jump), Scale armor, health kits, bats replace vultures.
 - **0.6 — The Shear**: thermals and the Thermal wing, ridgerunners, dedicated let-go button, Range visor, bottom-anchored menu close, iOS long-press hardening.
 - **0.7 — Wayfarer** *(current build)*: outposts and relics rewarding horizontal travel, world bounds that follow generation, jetpack as a toggle, fixed button grid, vitals above menus.
-- **0.8 — Alive Sky**: predator/prey ecology (bats hunting trout?), nests, day/night, scannable life, horizontal wind shear during glides.
-- **0.9 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
+- **0.8 — Long Night** *(current build)*: day/night cycle, storms with wind and lightning, sleeping at bases, field scanner and 11-entry log, nest robbing, skysteel, Fabricator Mk3, Storm suit, Ascender rig, and the Signal beacon ending.
+- **0.9 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions
 

@@ -19,6 +19,7 @@
     <div class="bar" id="bar-food"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
     <div class="bar" id="bar-energy"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
     <div class="bar hidden" id="bar-fuel"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+    <div id="weather" class="hidden"></div>
   </div>
   <button id="version-badge" type="button"><span class="badge-icon"></span><span id="version-text"></span></button>
 </div>
@@ -46,11 +47,17 @@
     <div id="inv-grid" class="inv-grid"></div>
     <h3>Fabricate</h3>
     <div id="recipe-list" class="recipe-list"></div>
+    <h3>Field log <button id="btn-open-log" class="mini-btn" type="button">Open log</button></h3>
+    <p class="panel-note" id="log-summary"></p>
     <h3>Playtest cheats</h3>
     <div class="cheat-row">
       <button class="mini-btn" type="button" data-cheat="mats">+20 materials</button>
       <button class="mini-btn" type="button" data-cheat="critters">+10 critters</button>
       <button class="mini-btn" type="button" data-cheat="relics">+3 relics</button>
+      <button class="mini-btn" type="button" data-cheat="steel">+8 skysteel</button>
+      <button class="mini-btn" type="button" data-cheat="scans">Fill field log</button>
+      <button class="mini-btn" type="button" data-cheat="storm">Summon storm</button>
+      <button class="mini-btn" type="button" data-cheat="night">Toggle night</button>
       <button class="mini-btn" type="button" data-cheat="kit">+3 base kits</button>
       <button class="mini-btn" type="button" data-cheat="gear">Unlock all gear</button>
       <button class="mini-btn" type="button" data-cheat="vitals">Refill vitals</button>
@@ -63,6 +70,7 @@
   <div class="panel">
     <div class="panel-head"><span class="panel-icon" id="base-icon"></span><h2 id="base-title">Base</h2></div>
     <p class="panel-note" id="base-note"></p>
+    <h3>Rest <button id="btn-rest" class="mini-btn" type="button">Sleep until dawn</button></h3>
     <h3>Storage <button id="btn-deposit" class="mini-btn" type="button">Deposit all</button></h3>
     <div id="base-store" class="inv-grid"></div>
     <h3>Fabricate</h3>
@@ -78,6 +86,25 @@
     <div id="changelog-body"></div>
     <p class="panel-note">Progress saves to this device automatically. Icons by <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> contributors (CC BY 3.0).</p>
     <button class="close-bar" data-close type="button">Close</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay-log">
+  <div class="panel">
+    <div class="panel-head"><span class="panel-icon" id="log-icon"></span><h2>Field log</h2></div>
+    <p class="panel-note" id="log-progress"></p>
+    <div id="log-list"></div>
+    <button class="close-bar" data-close type="button">Close</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay-win">
+  <div class="panel small">
+    <span class="win-icon" id="win-icon"></span>
+    <h2>The beacon answers</h2>
+    <p class="panel-note">Something above the cloud ceiling is listening. The sky keeps its secret a little longer — but you have the height now, and the light is yours.</p>
+    <p class="panel-note" id="win-stats"></p>
+    <button id="btn-win-close" class="primary-btn" type="button">Keep climbing</button>
   </div>
 </div>
 

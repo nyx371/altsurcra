@@ -1,8 +1,23 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.7.0';
+const GAME_VERSION = '0.8.0';
 
 const CHANGELOG = [
+  {
+    version: '0.8.0',
+    name: 'Long Night',
+    date: '2026-07-26',
+    notes: [
+      'Day and night: the sky turns, stars come out, nightwings hunt harder and thermals go weak after dark',
+      'Storms roll in with driving wind that shoves you mid-glide, and lightning that hunts anything high and exposed',
+      'Sleep at a base to skip to dawn — costs food, restores energy, fuel and some health',
+      'Field scanner and field log: scan 11 rocks, creatures and landmarks to fill it in',
+      'Rob stingwing nests for eggs — the resident wakes up angry',
+      'Skysteel appears on the highest faces and unlocks Fabricator Mk3',
+      'Mk3 gear: Storm suit (lightning-proof), Ascender rig (fast, cheap climbing), Signal beacon',
+      'Raise the beacon on the highest rock in the world to finish the run',
+    ],
+  },
   {
     version: '0.7.0',
     name: 'Wayfarer',
