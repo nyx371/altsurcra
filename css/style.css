@@ -34,6 +34,7 @@ svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 .bars { display: flex; flex-direction: column; gap: 6px; }
 
 .bar { display: flex; align-items: center; gap: 6px; }
+.bar.hidden { display: none; }
 .bar-icon { width: 20px; height: 20px; flex: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
 .bar-track {
   width: 130px; height: 10px; border-radius: 5px;
@@ -166,7 +167,7 @@ button { touch-action: manipulation; } /* taps fire instantly, double-tap never 
   text-transform: none; letter-spacing: 0; cursor: pointer;
 }
 .mini-btn:disabled { background: rgba(255,255,255,.12); color: #7e93bd; }
-.mini-btn.danger { margin: 4px 0 0; background: rgba(255,93,108,.18); color: #ff8a94; }
+.mini-btn.danger { display: block; width: 100%; margin: 12px 0 4px; padding: 9px 12px; font-size: 12px; background: rgba(255,93,108,.18); color: #ff8a94; }
 .mini-btn.danger.confirm { background: #ff5d6c; color: #fff; }
 .panel-head { display: flex; align-items: center; gap: 10px; }
 .panel-icon { width: 24px; height: 24px; color: #aecbff; flex: none; }
@@ -178,21 +179,27 @@ button { touch-action: manipulation; } /* taps fire instantly, double-tap never 
   font-size: 20px; line-height: 1; cursor: pointer; flex: none;
 }
 
-.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 8px; }
 .inv-item {
-  display: flex; align-items: center; gap: 7px;
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,255,255,.1);
-  border-radius: 10px; padding: 7px 9px;
-  font-size: 12px;
+  border-radius: 12px; padding: 9px 4px 7px;
 }
-.inv-item .i-icon { width: 22px; height: 22px; flex: none; color: #cfe0ff; }
-.inv-item .i-count { margin-left: auto; font-weight: 700; color: #fff; }
-.inv-item button {
-  border: none; border-radius: 8px; padding: 3px 8px;
-  background: #2c6df2; color: #fff; font-size: 11px; cursor: pointer;
+.inv-item .i-icon { width: 28px; height: 28px; color: #cfe0ff; }
+.inv-item .i-count {
+  position: absolute; top: 3px; right: 6px;
+  font-size: 12px; font-weight: 700; color: #fff;
 }
+.inv-item .i-name { font-size: 10px; color: #9db2d8; text-align: center; line-height: 1.2; }
+.inv-item.usable { cursor: pointer; border-color: rgba(44,109,242,.65); }
+.inv-item.usable:active { background: rgba(44,109,242,.3); }
 .inv-empty { grid-column: 1 / -1; font-size: 12px; color: #7e93bd; padding: 4px 2px; }
+
+.cheat-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.cheat-row .mini-btn { margin: 0; background: rgba(255,255,255,.1); color: #cfe0ff; }
+.cheat-row .mini-btn:active { background: #2c6df2; color: #fff; }
 
 .recipe-list { display: flex; flex-direction: column; gap: 8px; }
 .recipe {

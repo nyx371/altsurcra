@@ -1,8 +1,21 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.3.0';
+const GAME_VERSION = '0.4.0';
 
 const CHANGELOG = [
+  {
+    version: '0.4.0',
+    name: 'Ground Up',
+    date: '2026-07-26',
+    notes: [
+      'You start with bare hands — gather on foot and fabricate Magnetic gloves before any cliff will take you',
+      'Small hills and stepped shelves everywhere, jumpable without gloves',
+      'Death no longer drops anything in the world: your first 4 falls are free, then each one costs a quarter of your materials',
+      'Playtest cheat buttons in the pack: materials, base kits, unlock all gear, refill vitals',
+      'Restart moved to the top of this panel',
+      'Compact inventory tiles — tap one to eat or place it',
+    ],
+  },
   {
     version: '0.3.0',
     name: 'Open Sky',

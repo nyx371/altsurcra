@@ -2,6 +2,15 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.4.0 — Ground Up (2026-07-26)
+
+- You start with bare hands — gather on foot and fabricate Magnetic gloves before any cliff will take you
+- Small hills and stepped shelves everywhere, jumpable without gloves
+- Death no longer drops anything in the world: your first 4 falls are free, then each one costs a quarter of your materials
+- Playtest cheat buttons in the pack: materials, base kits, unlock all gear, refill vitals
+- Restart moved to the top of the changelog panel
+- Compact inventory tiles — tap one to eat or place it
+
 ## v0.3.0 — Open Sky (2026-07-26)
 
 - Cliffs no longer block you — walk in front of them, hold up to grab the face, climb anywhere on it

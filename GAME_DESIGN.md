@@ -37,6 +37,8 @@ Session shape (target 3–10 min): leave a safe ledge with full energy, execute 
 
 - **Walk/jump** on island tops and ledges. No energy cost.
 - **Cliffs never block movement [v0.3]**: they sit behind the play layer. You walk in front of them, and small cliff shelves give you platforms to stand on. This makes the world read as *terrain to choose from*, not corridors.
+- **Hills and steps [v0.4]**: low rock (under the ~105px standing jump) is scattered everywhere, often stacked into two tiers. Before you have gloves this is your whole vertical vocabulary — hop up a hill, hop to its step, take the berries off the top. It teaches height-as-reward using only the jump button, and it means the first ten minutes have real terrain instead of a flat waiting room.
+- **Climbing must be earned [v0.4]**: you start bare-handed and *no* face will take you. **Magnetic gloves** are the first thing you fabricate (5 fiber, 4 stone — both gatherable on foot), and the glove-energy bar doesn't even appear until you own them. Starting with the signature verb spends it for free; making the player look up at an unclimbable wall for ten minutes first makes the gloves land.
 - **Climb [v0.3 model]**: hold up while in front of a face to grab it (if energy > 0 and your gloves match the rock — see 4.4). On the face you move freely in 2D — up, down, sideways — mantle over the top edge, or hold down from a top to start a down-climb.
   - Moving on the wall drains energy per meter; hanging still drains only a slow trickle **[v0.2: cut to ~1/s]** — enough to keep the "energy is oxygen" pressure honest, cheap enough that stopping to read a route is a real option. Route-reading is the skill we want to reward, not thumb speed.
   - **Energy hits 0 → gloves release → you fall.** This is the core tension.
@@ -54,7 +56,9 @@ Session shape (target 3–10 min): leave a safe ledge with full energy, execute 
 
 Water/thirst is deliberately **not** in scope for now (one survival clock — food — plus the energy clock is enough pressure on mobile). Revisit later.
 
-**Death and loss [v0.2].** Dying scatters your **raw materials** into a cache at the spot you fell; crafted gear and permanent upgrades are never lost. You wake at the last base you actually stood in — not the nearest one to your body, because deaths are usually long falls and "nearest" would drag you back down past everything you built. The cache is marked on screen (with an edge pointer when off screen) and recovered by touching it. This is the Subnautica retrieval-dive inverted: the run back to your stuff is a *climb*, made with an empty pack, and it's some of the best tension in the game. Bases exist partly to make it optional — stash before you push higher.
+**Death and loss [v0.4].** Nothing is left lying in the world. Your first **four** falls cost you nothing at all; from the fifth onward each death takes **a quarter of every raw material** you're carrying (rounded down, so small stacks survive). Crafted gear and permanent upgrades are never lost, and you wake at the last base you actually stood in — deaths are usually long falls, and respawning at the *nearest* base would drag you back down past everything you built.
+
+*Why this replaced the v0.2 corpse-run:* retrieval climbs sounded great on paper, but they punish the player twice — once for dying, again with a mandatory backtrack up terrain they'd already solved. A percentage toll keeps death meaningful without ever making you re-climb for a bag. The grace period matters too: the first hour is when you're still learning that energy runs out, and taxing that is just noise. Bases and storage stay valuable because 25% of a big haul hurts, so stashing before a hard push is still the smart play.
 
 ### 4.3½ Cliff rock tiers **[v0.3]**
 
@@ -136,8 +140,12 @@ Base (at a placed base, with Mk2 built):
 
 ### 6.4 Progression skeleton
 
-Reach is gated by energy ceiling and glide tech, not by artificial walls:
-`bare gloves → Glider → Battery Mk1 → first base + Mk2 → Battery Mk2 → Band 2 tech (wind gear) → …`
+Reach is gated by grip, energy ceiling and glide tech, not by artificial walls:
+`bare hands (hills only) → Magnetic gloves → Glider → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Battery Mk2 → Resonant magnets (storm rock) → …`
+
+### 6.5 Playtest cheats **[v0.4]**
+
+The pack carries a **Playtest** row: +20 materials, +3 base kits, unlock all gear, refill vitals. Restart-and-remix sits at the top of the changelog panel. These are deliberately in the shipped build — this is a design tool as much as a game right now, and being able to jump straight to "what does storm rock feel like with Mk2" beats replaying the opening every time. They come out (or go behind a tap-the-version-five-times gesture) when we start showing it to fresh players.
 
 ## 7. Bases **[v0.2]**
 
@@ -186,7 +194,8 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 
 - **0.1 — First Climb** *(this build)*: core movement (walk/climb/glide), energy, vitals, harvest, personal fabricator, 4 recipes, base kit + Mk2 teaser, 2 threats, 2 islands, version/changelog UI.
 - **0.2 — Homestead**: cliff-wall base placement with standable decks, base storage, material-drop death with recoverable caches, respawn at last base, autosave to localStorage, cheaper idle hang.
-- **0.3 — Open Sky** *(current build)*: non-blocking climbable cliff *faces* (walk past, grab anywhere, free 2D wall movement, climb down from tops), seeded world remix per run, rock tiers gated by gear (granite/basalt/storm rock), Glove pulse defense, neutral cliff lizards, tutorial layer removed.
+- **0.3 — Open Sky**: non-blocking climbable cliff *faces* (walk past, grab anywhere, free 2D wall movement, climb down from tops), seeded world remix per run, rock tiers gated by gear (granite/basalt/storm rock), Glove pulse defense, neutral cliff lizards, tutorial layer removed.
+- **0.4 — Ground Up** *(current build)*: climbing must be crafted, jumpable hills and stepped shelves, percentage death toll after a grace period (no world caches), playtest cheats, compact inventory.
 - **0.4 — The Shear**: wind during glides, thermal wing, new materials + wind-tech recipes, richer generation (caves? overhangs?).
 - **0.5 — Alive Sky**: creature AI pass, nest ecology, day/night, scannable life.
 - **0.6 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
@@ -196,7 +205,7 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 ### Settled
 
 1. **Energy while hanging still** — kept as a drain, but cut to roughly 1/s in v0.2. Zero drain would have made the wall a couch; this keeps the oxygen analogy while letting you stop and plan. *Revisit if playtests show people still rushing routes.*
-2. **Death penalty** — on as of v0.2: raw materials drop into a recoverable cache, gear and upgrades never do. Retrieval climbs are too good to leave on the table, and capping the loss at materials keeps it from feeling punitive.
+2. **Death penalty** — settled twice. v0.2 dropped a recoverable cache; v0.4 replaced it with a flat 25% material toll after four free falls, because forced retrieval climbs punish the player twice and make them re-solve terrain they'd already beaten. See 4.2.
 
 ### Still open (for Kalle)
 

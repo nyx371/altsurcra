@@ -24,13 +24,17 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Pack + personal fabricator | knapsack button | C |
 | Changelog + wipe save / remix world | version badge (top right) | — |
 
-Cliffs never block you — walk in front of them. Hold up to grab the face and climb anywhere on it; climbing drains glove energy and at zero you fall. Recharge on flat ground, fastest near the camp or a base. Granite climbs bare-handed; basalt needs **Grip spikes**; storm rock needs **Resonant magnets**.
+You start bare-handed: gather on foot, hop the low hills, and fabricate **Magnetic gloves** before any cliff will take you. After that, cliffs never block you — walk in front of them, hold up to grab the face, and climb anywhere on it. Climbing drains glove energy and at zero you fall. Recharge on flat ground, fastest near the camp or a base. Granite needs gloves; basalt needs **Grip spikes**; storm rock needs **Resonant magnets**.
+
+Your first four falls are free. From the fifth on, each death costs a quarter of the raw materials you're carrying — gear and upgrades are never lost, and nothing is left behind in the world to go fetch.
+
+The pack has a **Playtest cheats** row (materials, base kits, unlock gear, refill vitals), and **Restart** sits at the top of the changelog panel.
 
 ## The world
 
 Every new game generates a fresh island chain from a random seed — resuming keeps your world, wiping the save remixes it. There are no guided goals: explore, harvest, craft, and push upward. Stingwings guard cliffs and Razorbeaks patrol the gaps (craft the **Glove pulse** and tap the hand button to drive them off); neutral lizards just live on the rock.
 
-Dying scatters your raw materials into a cache where you fell — gear and upgrades are safe, and the cache is marked so you can climb back for the rest. Progress autosaves to your device.
+Progress autosaves to your device.
 
 ## Credits
 

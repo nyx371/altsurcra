@@ -69,13 +69,15 @@ const T = {
   fallSafeVel: 620,
   fallDmgScale: 0.09,
   invulnTime: 0.9,
-  cacheGrabRadius: 60,
   pulseCost: 12,
   pulseRadius: 130,
 };
 
-// Raw materials scatter into a recoverable cache on death; crafted upgrades never do.
-const DROP_ON_DEATH = ['berry', 'ration', 'fiber', 'stone', 'ore', 'crystal', 'basekit'];
+const RAW_MATERIALS = ['berry', 'ration', 'fiber', 'stone', 'ore', 'crystal', 'basekit'];
+
+// The sky is gentle for your first few falls; after that every death costs you a cut.
+const FREE_DEATHS = 4;
+const LOSS_FRACTION = 0.25;
 
 // Cliff rock types. Higher tiers need better climbing gear.
 const CLIFF_TYPES = {
@@ -84,7 +86,11 @@ const CLIFF_TYPES = {
   stormrock: { name: 'Storm rock', tier: 3, color: '#3b2a4e', shade: '#301f42', lip: '#7a5f9e', lip2: '#9b7fc4' },
 };
 
-function gloveTier() { return flags.magnets ? 3 : flags.spikes ? 2 : 1; }
+// 0 = bare hands: no face is climbable until you fabricate gloves.
+function gloveTier() {
+  if (!flags.gloves) return 0;
+  return flags.magnets ? 3 : flags.spikes ? 2 : 1;
+}
 
 // ---------- world generation ----------
 
@@ -129,16 +135,44 @@ function generateWorld(seed) {
     return addCliff(R(r.x - 20, r.x + r.w - w + 20), R(r.y + 70, r.y + r.h - 60), w, 16, r.type, 0);
   };
 
-  // --- start island: safe granite, several practice cliffs ---
+  // --- start island: safe granite, hills to scramble, practice cliffs ---
   const groundY = 2500;
-  const startW = R(680, 880);
+  const startW = R(760, 980);
   const sx = R(120, 260);
   const slab0 = addCliff(sx, groundY, startW, 300, 'granite', 170);
-  CAMP = { x: sx + R(80, 140), y: groundY };
+  CAMP = { x: sx + R(70, 120), y: groundY };
 
-  addNode('berry', CAMP.x + R(120, 200), groundY);
-  addNode('stone', sx + startW * R(0.45, 0.6), groundY);
-  addNode('fiber', sx + startW * R(0.3, 0.42), groundY);
+  // Everything needed for your first gloves must be reachable by jumping alone.
+  let groundFiber = 0, groundStone = 0;
+  const groundNode = (type, x, y) => {
+    addNode(type, x, y);
+    if (type === 'fiber') groundFiber++;
+    if (type === 'stone') groundStone++;
+  };
+
+  groundNode('berry', CAMP.x + R(90, 150), groundY);
+  groundNode('stone', sx + startW * R(0.4, 0.52), groundY);
+  groundNode('fiber', sx + startW * R(0.24, 0.36), groundY);
+
+  // low hills: jumpable without gloves, stepped so a couple of hops gain height
+  let hx = sx + R(140, 200);
+  const nHills = RI(3, 5);
+  for (let i = 0; i < nHills && hx < sx + startW - 150; i++) {
+    const hw = R(76, 132);
+    const hh = R(36, 86);
+    const hill = addCliff(hx, groundY - hh, hw, hh, 'granite', 0);
+    groundNode(rnd() < 0.5 ? 'fiber' : 'stone', hill.x + hw / 2, hill.y);
+    // a second tier you can only reach off the first
+    if (rnd() < 0.55) {
+      const sw = R(46, 78), sh = R(40, 74);
+      const step = addCliff(hill.x + R(4, Math.max(6, hw - sw - 4)), hill.y - sh, sw, sh, 'granite', 0);
+      groundNode(rnd() < 0.6 ? 'fiber' : 'stone', step.x + sw / 2, step.y);
+      if (rnd() < 0.5) groundNode('berry', step.x + sw / 2 + R(-14, 14), step.y);
+    }
+    hx += hw + R(90, 170);
+  }
+  while (groundFiber < 4) groundNode('fiber', sx + startW * R(0.2, 0.85), groundY);
+  while (groundStone < 4) groundNode('stone', sx + startW * R(0.2, 0.85), groundY);
 
   const nTowers = RI(2, 3);
   let launch = { x: CAMP.x, top: groundY };
@@ -170,6 +204,13 @@ function generateWorld(seed) {
     let x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW;
     if (x < 80 || x + slabW > WORLD.right - 120) { dir = -dir; x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW; }
     const slab = addCliff(x, slabTop, slabW, Math.min(R(240, 380), WORLD.cloudSea - 90 - slabTop), type, R(120, 180));
+
+    // a hill or two on the deck of each island, so there is scrambling everywhere
+    if (rnd() < 0.7) {
+      const hw = R(70, 120), hh = R(36, 78);
+      const hill = addCliff(x + R(30, Math.max(40, slabW - hw - 30)), slabTop - hh, hw, hh, type, 0);
+      addNode(rnd() < 0.5 ? 'stone' : 'fiber', hill.x + hw / 2, hill.y);
+    }
 
     const tw = R(110, 190);
     const th = R(320, 520);
@@ -246,16 +287,17 @@ const ITEMS = {
 };
 
 const RECIPES = [
-  { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },           desc: 'Dense food. +35 food when eaten.' },
-  { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 }, desc: 'Hold Jump in the air to glide.', flag: 'glider', once: true },
-  { id: 'pulse',    tier: 'personal', name: 'Glove pulse',       icon: 'spiky-explosion', cost: { crystal: 1, ore: 1 }, desc: 'Tap the hand near a creature: magnetic burst drives it off. Costs energy.', flag: 'pulse', once: true },
-  { id: 'battery1', tier: 'personal', name: 'Glove battery Mk1', icon: 'battery-pack',    cost: { ore: 2, crystal: 2 }, desc: 'Max glove energy 100 → 150.', flag: 'battery1', once: true },
-  { id: 'spikes',   tier: 'personal', name: 'Grip spikes',       icon: 'spikes',          cost: { ore: 3, stone: 2 },   desc: 'Bite into slick basalt faces.', flag: 'spikes', once: true },
-  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',           cost: { stone: 6, fiber: 4 }, desc: 'Place on ground or bolt to a cliff. Storage, fast recharge, respawn.' },
-  { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 }, desc: 'Unlocks heavy fabrication at this base.' },
-  { id: 'battery2', tier: 'mk2',      name: 'Glove battery Mk2', icon: 'battery-pack',    cost: { ore: 4, crystal: 4 }, desc: 'Max glove energy → 220. Needs Mk1.', flag: 'battery2', once: true, needs: 'battery1' },
-  { id: 'magnets',  tier: 'mk2',      name: 'Resonant magnets',  icon: 'magnet',          cost: { ore: 2, crystal: 5 }, desc: 'Grip charged storm rock. Needs Grip spikes.', flag: 'magnets', once: true, needs: 'spikes' },
-  { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'hang-glider',     cost: {},                     desc: 'Ride rising air. Coming in v0.4.', locked: true },
+  { id: 'gloves',   tier: 'personal', name: 'Magnetic gloves',   icon: 'gloves',          cost: { fiber: 5, stone: 4 }, desc: 'Climb granite faces.', flag: 'gloves', once: true },
+  { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },           desc: '+35 food.' },
+  { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 }, desc: 'Hold Jump to glide.', flag: 'glider', once: true },
+  { id: 'pulse',    tier: 'personal', name: 'Glove pulse',       icon: 'spiky-explosion', cost: { crystal: 1, ore: 1 }, desc: 'Tap hand: blast creatures away.', flag: 'pulse', once: true },
+  { id: 'battery1', tier: 'personal', name: 'Battery Mk1',       icon: 'battery-pack',    cost: { ore: 2, crystal: 2 }, desc: 'Energy 100 → 150.', flag: 'battery1', once: true },
+  { id: 'spikes',   tier: 'personal', name: 'Grip spikes',       icon: 'spikes',          cost: { ore: 3, stone: 2 },   desc: 'Climb basalt.', flag: 'spikes', once: true },
+  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',           cost: { stone: 6, fiber: 4 }, desc: 'Storage, recharge, respawn.' },
+  { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 }, desc: 'Heavy fabrication here.' },
+  { id: 'battery2', tier: 'mk2',      name: 'Battery Mk2',       icon: 'battery-pack',    cost: { ore: 4, crystal: 4 }, desc: 'Energy → 220.', flag: 'battery2', once: true, needs: 'battery1' },
+  { id: 'magnets',  tier: 'mk2',      name: 'Resonant magnets',  icon: 'magnet',          cost: { ore: 2, crystal: 5 }, desc: 'Climb storm rock.', flag: 'magnets', once: true, needs: 'spikes' },
+  { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'hang-glider',     cost: {},                     desc: 'Ride rising air.', locked: true },
 ];
 
 // ---------- state ----------
@@ -273,9 +315,9 @@ const player = {
 };
 
 const inv = { berry: 0, ration: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, basekit: 0 };
-const flags = { glider: false, pulse: false, battery1: false, battery2: false, spikes: false, magnets: false };
+const flags = { gloves: false, glider: false, pulse: false, battery1: false, battery2: false, spikes: false, magnets: false };
 const bases = [];   // {x, y, mk2, wall, store:{}, deck:rect}
-const caches = [];  // {x, y, items:{}}
+let deaths = 0;
 let paused = false;
 let gameTime = 0;
 let pulseFx = null; // {x, y, t}
@@ -304,7 +346,9 @@ document.addEventListener('dblclick', e => e.preventDefault(), { passive: false 
 document.addEventListener('contextmenu', e => e.preventDefault());
 let lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
-  if (e.target.closest && e.target.closest('button, a')) return;
+  // Menus need rapid repeat taps (craft, eat, take); only the game surface
+  // needs the double-tap-zoom guard.
+  if (e.target.closest && e.target.closest('button, a, .overlay')) return;
   const now = Date.now();
   if (now - lastTouchEnd < 350 && e.cancelable) e.preventDefault();
   lastTouchEnd = now;
@@ -432,10 +476,11 @@ function faceAt(px, py) {
 
 function canClimb(r) { return CLIFF_TYPES[r.type].tier <= gloveTier(); }
 
-let slickToastAt = -99;
-function slickFeedback(r) {
-  if (gameTime - slickToastAt < 6) return;
-  slickToastAt = gameTime;
+let gripToastAt = -99;
+function gripFeedback(r) {
+  if (gameTime - gripToastAt < 6) return;
+  gripToastAt = gameTime;
+  if (!flags.gloves) { toast('No grip — fabricate gloves', 'bad', 'gloves'); return; }
   const def = CLIFF_TYPES[r.type];
   toast(def.name + ' — needs ' + (def.tier === 2 ? 'Grip spikes' : 'Resonant magnets'), 'bad',
     def.tier === 2 ? 'spikes' : 'magnet');
@@ -445,7 +490,7 @@ function tryGrab() {
   if (player.energy <= 3 || player.detachTimer > 0) return false;
   const r = faceAt(player.x + P_W / 2, player.y + P_H / 2);
   if (!r) return false;
-  if (!canClimb(r)) { slickFeedback(r); return false; }
+  if (!canClimb(r)) { gripFeedback(r); return false; }
   player.state = 'climb';
   player.climbRect = r;
   player.vx = 0; player.vy = 0;
@@ -527,7 +572,7 @@ function updatePlayer(dt) {
         player.vx = 0; player.vy = 0;
         return;
       }
-      if (on && !on.deck && on.h > 60 && !canClimb(on)) slickFeedback(on);
+      if (on && !on.deck && on.h > 60 && !canClimb(on)) gripFeedback(on);
     }
     if (player.state === 'ground' && !standingOn()) player.state = 'air';
   } else {
@@ -582,29 +627,33 @@ function hurt(dmg, cause) {
   if (player.hp <= 0) die(cause || 'The sky took you');
 }
 
+// Nothing is left lying in the world — a fall costs you a share of what you
+// carried, and only once the sky stops being polite about it.
+function applyDeathToll() {
+  deaths++;
+  if (deaths <= FREE_DEATHS) return null;
+  const lost = [];
+  for (const id of RAW_MATERIALS) {
+    const cut = Math.floor(inv[id] * LOSS_FRACTION);
+    if (cut > 0) { inv[id] -= cut; lost.push(cut + ' ' + ITEMS[id].name.toLowerCase()); }
+  }
+  return lost.length ? lost : null;
+}
+
 function die(cause) {
   if (deathCause) return;
   deathCause = cause;
   paused = true;
-  const dropped = dropCache(player.x + P_W / 2, player.y + P_H / 2);
+  const lost = applyDeathToll();
+  const grace = FREE_DEATHS - deaths + 1;
   document.getElementById('death-title').textContent = cause;
-  document.getElementById('death-note').textContent = dropped
-    ? 'Your materials scattered where you fell. Your gear and upgrades are still yours — go back and get the rest.'
-    : 'You were carrying nothing. Your gear and upgrades are still yours.';
+  document.getElementById('death-note').textContent =
+    lost ? 'Lost in the fall: ' + lost.join(', ') + '.'
+    : deaths <= FREE_DEATHS
+      ? 'Nothing lost. ' + grace + ' more forgiving ' + (grace === 1 ? 'fall' : 'falls') + '.'
+      : 'Nothing on you to lose.';
   document.getElementById('overlay-death').classList.remove('hidden');
   saveGame();
-}
-
-function dropCache(x, y) {
-  const items = {};
-  let any = false;
-  for (const id of DROP_ON_DEATH) {
-    if (inv[id] > 0) { items[id] = inv[id]; inv[id] = 0; any = true; }
-  }
-  if (!any) return false;
-  caches.push({ x: clamp(x, WORLD.left, WORLD.right), y: Math.min(y, WORLD.cloudSea - 140), items });
-  while (caches.length > 3) caches.shift();
-  return true;
 }
 
 function respawn() {
@@ -621,18 +670,6 @@ function respawn() {
   document.getElementById('overlay-death').classList.add('hidden');
   paused = anyOverlayOpen();
   saveGame();
-}
-
-function updateCaches() {
-  const px = player.x + P_W / 2, py = player.y + P_H / 2;
-  for (let i = caches.length - 1; i >= 0; i--) {
-    if (dist(px, py, caches[i].x, caches[i].y) > T.cacheGrabRadius) continue;
-    let n = 0;
-    for (const [id, count] of Object.entries(caches[i].items)) { inv[id] += count; n += count; }
-    caches.splice(i, 1);
-    toast('Cache recovered — ' + n + ' items', 'good', 'swap-bag');
-    saveGame();
-  }
 }
 
 function updateVitals(dt) {
@@ -850,6 +887,7 @@ function craft(recipe, base) {
   if (!canAfford(recipe)) { toast('Not enough materials', 'bad'); return; }
   for (const [k, v] of Object.entries(recipe.cost)) inv[k] -= v;
 
+  if (recipe.id === 'gloves') { flags.gloves = true; toast('Gloves fitted — hold up at a face', 'good', 'gloves'); }
   if (recipe.id === 'ration') { inv.ration += 1; toast('Trail ration', 'good', 'meat'); }
   if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated', 'good', 'hang-glider'); }
   if (recipe.id === 'pulse') { flags.pulse = true; toast('Glove pulse armed', 'good', 'spiky-explosion'); }
@@ -924,7 +962,7 @@ function takeItem(base, id, all) {
 
 function depositAll(base) {
   let moved = 0;
-  for (const id of DROP_ON_DEATH) {
+  for (const id of RAW_MATERIALS) {
     if (inv[id] > 0) { base.store[id] = (base.store[id] || 0) + inv[id]; moved += inv[id]; inv[id] = 0; }
   }
   if (moved) toast('Stored ' + moved + ' items', 'good', 'chest');
@@ -952,7 +990,7 @@ function saveGame() {
       inv, flags,
       bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, wall: !!b.wall, store: b.store || {} })),
       lastSafe: bases.indexOf(lastSafe),
-      caches,
+      deaths,
       nodes: NODES.map(n => Math.max(0, n.depletedUntil - gameTime)),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -980,8 +1018,7 @@ function loadGame() {
   }
   const li = typeof data.lastSafe === 'number' ? data.lastSafe : -1;
   lastSafe = li >= 0 && bases[li] ? bases[li] : CAMP;
-  caches.length = 0;
-  for (const c of data.caches || []) caches.push(c);
+  deaths = data.deaths || 0;
   if (data.nodes) NODES.forEach((n, i) => { n.depletedUntil = gameTime + (data.nodes[i] || 0); });
   return true;
 }
@@ -1046,6 +1083,22 @@ function recipeRow(recipe, base) {
   return row;
 }
 
+// Compact tile: icon, count, short name. Tap a usable tile to eat or place it.
+function invTile(id, def, count, onUse, useLabel) {
+  const el = document.createElement('div');
+  el.className = 'inv-item' + (onUse ? ' usable' : '');
+  el.innerHTML =
+    '<span class="i-icon">' + svgIcon(def.icon) + '</span>' +
+    '<span class="i-count">' + count + '</span>' +
+    '<span class="i-name"></span>';
+  el.querySelector('.i-name').textContent = def.name;
+  if (onUse) {
+    el.title = useLabel;
+    el.addEventListener('click', onUse);
+  }
+  return el;
+}
+
 function renderPack() {
   const grid = document.getElementById('inv-grid');
   grid.innerHTML = '';
@@ -1053,30 +1106,45 @@ function renderPack() {
   for (const [id, def] of Object.entries(ITEMS)) {
     if (inv[id] <= 0) continue;
     any = true;
-    const el = document.createElement('div');
-    el.className = 'inv-item';
-    el.innerHTML = '<span class="i-icon">' + svgIcon(def.icon) + '</span><span></span><span class="i-count">' + inv[id] + '</span>';
-    el.children[1].textContent = def.name;
-    if (def.eat) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.textContent = 'Eat';
-      b.addEventListener('click', () => eatItem(id));
-      el.appendChild(b);
-    }
-    if (def.place) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.textContent = 'Place';
-      b.addEventListener('click', placeBase);
-      el.appendChild(b);
-    }
-    grid.appendChild(el);
+    const use = def.eat ? () => eatItem(id) : def.place ? placeBase : null;
+    grid.appendChild(invTile(id, def, inv[id], use, def.eat ? 'Eat' : 'Place'));
   }
-  if (!any) grid.innerHTML = '<div class="inv-empty">Empty. Cliff faces hold what you need.</div>';
+  if (!any) grid.innerHTML = '<div class="inv-empty">Empty</div>';
 
   const list = document.getElementById('recipe-list');
   list.innerHTML = '';
   for (const r of RECIPES) if (r.tier === 'personal') list.appendChild(recipeRow(r));
 }
+
+// ---------- playtest cheats ----------
+
+const CHEATS = {
+  mats() {
+    for (const id of ['berry', 'fiber', 'stone', 'ore', 'crystal']) inv[id] += 20;
+    toast('+20 of each material', 'good', 'knapsack');
+  },
+  gear() {
+    for (const k of Object.keys(flags)) flags[k] = true;
+    player.maxEnergy = 220; player.energy = 220;
+    toast('All gear unlocked', 'good', 'gloves');
+  },
+  vitals() {
+    player.hp = 100; player.food = 100; player.energy = player.maxEnergy;
+    toast('Vitals refilled', 'good', 'hearts');
+  },
+  kit() {
+    inv.basekit += 3;
+    toast('+3 base kits', 'good', 'house');
+  },
+};
+
+document.querySelectorAll('[data-cheat]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    CHEATS[btn.dataset.cheat]();
+    renderPack();
+    saveGame();
+  });
+});
 
 let openBaseRef = null;
 function openBase(base) {
@@ -1088,28 +1156,20 @@ function renderBase(base) {
   document.getElementById('base-title').textContent =
     (base.wall ? 'Cliff base' : 'Base') + (base.mk2 ? ' — Fabricator Mk2' : '');
   document.getElementById('base-note').textContent = base.mk2
-    ? 'Heavy fabrication online. Glove energy recharges fast inside the base perimeter.'
-    : 'A powered fabricator needs an anchor point. Build the Mk2 here to unlock heavier gear.';
+    ? 'Fast recharge in range.'
+    : 'Build the Mk2 here for heavier gear.';
 
   const store = document.getElementById('base-store');
   store.innerHTML = '';
   const ids = Object.keys(base.store || {}).filter(id => base.store[id] > 0);
   if (!ids.length) {
-    store.innerHTML = '<div class="inv-empty">Storage empty. Stash materials here so a fall cannot cost you them.</div>';
+    store.innerHTML = '<div class="inv-empty">Empty</div>';
   } else {
     for (const id of ids) {
-      const el = document.createElement('div');
-      el.className = 'inv-item';
-      el.innerHTML = '<span class="i-icon">' + svgIcon(ITEMS[id].icon) + '</span><span></span><span class="i-count">' + base.store[id] + '</span>';
-      el.children[1].textContent = ITEMS[id].name;
-      const b = document.createElement('button');
-      b.type = 'button'; b.textContent = 'Take';
-      b.addEventListener('click', () => takeItem(base, id, true));
-      el.appendChild(b);
-      store.appendChild(el);
+      store.appendChild(invTile(id, ITEMS[id], base.store[id], () => takeItem(base, id, true), 'Take'));
     }
   }
-  const carrying = DROP_ON_DEATH.some(id => inv[id] > 0);
+  const carrying = RAW_MATERIALS.some(id => inv[id] > 0);
   const dep = document.getElementById('btn-deposit');
   dep.disabled = !carrying;
   dep.onclick = () => depositAll(base);
@@ -1180,6 +1240,8 @@ function updateHUD() {
   document.getElementById('bar-health').classList.toggle('warn', player.hp < 25);
   document.getElementById('bar-food').classList.toggle('warn', player.food < 20);
   document.getElementById('bar-energy').classList.toggle('warn', player.energy < player.maxEnergy * 0.2);
+  // glove energy means nothing until you have gloves
+  document.getElementById('bar-energy').classList.toggle('hidden', !flags.gloves);
 
   const jumpIcon = document.querySelector('#btn-jump .abtn-icon');
   const want = (player.state === 'glide' || (flags.glider && player.state === 'air')) ? 'hang-glider' : 'jump-across';
@@ -1316,17 +1378,6 @@ function render() {
     drawIcon(ctx, 'flying-flag', b.x + 4, by - 48, 15, 'rgba(143,199,255,0.55)');
   }
 
-  // death caches
-  for (const c of caches) {
-    const bob = Math.sin(gameTime * 2.4 + c.x) * 4;
-    ctx.save();
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = '#ffd76b';
-    ctx.beginPath(); ctx.arc(c.x, c.y + bob, 22 + Math.sin(gameTime * 3) * 3, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    drawIcon(ctx, 'swap-bag', c.x, c.y + bob, 30, '#ffd76b');
-    drawIcon(ctx, 'position-marker', c.x, c.y + bob - 34, 18, '#ffd76b', 0.85);
-  }
 
   // nodes
   const active = nearestNode();
@@ -1412,20 +1463,6 @@ function render() {
 
   ctx.restore();
 
-  // screen-edge pointers to off-screen caches
-  for (const c of caches) {
-    const s = w2s(c.x, c.y);
-    const m = 42;
-    if (s.x > m && s.x < cw - m && s.y > m && s.y < chh - m) continue;
-    const px = clamp(s.x, m, cw - m), py = clamp(s.y, m, chh - m);
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = 'rgba(10,16,36,0.7)';
-    ctx.beginPath(); ctx.arc(px, py, 18, 0, Math.PI * 2); ctx.fill();
-    drawIcon(ctx, 'swap-bag', px, py, 20, '#ffd76b');
-    ctx.restore();
-  }
-
   if (gameTime < saveNoticeUntil) {
     ctx.save();
     ctx.globalAlpha = clamp(saveNoticeUntil - gameTime, 0, 1) * 0.7;
@@ -1508,7 +1545,6 @@ function frame(now) {
     gameTime += dt;
     updatePlayer(dt);
     updateVitals(dt);
-    updateCaches();
     updateInteraction(dt);
     updateStingwings(dt);
     updateRazorbeaks(dt);
@@ -1547,14 +1583,16 @@ initClouds();
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Open Sky', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Ground Up', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
 // Debug/playtest handle (also used by automated smoke tests)
 window.SKYREACH = {
-  player, inv, flags, bases, caches, T, version: GAME_VERSION,
-  saveGame, loadGame, generateWorld,
+  player, inv, flags, bases, T, version: GAME_VERSION,
+  saveGame, loadGame, generateWorld, CHEATS,
+  get deaths() { return deaths; },
+  set deaths(v) { deaths = v; },
   get rocks() { return rocks; },
   get nodes() { return NODES; },
   get stingwings() { return stingwings; },
