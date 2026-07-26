@@ -71,9 +71,20 @@ const T = {
   invulnTime: 0.9,
   pulseCost: 12,
   pulseRadius: 130,
+  captureTime: 1.1,
+  critterRespawn: 90,
+  jumpVel2: 500,          // second (boot) jump
+  jetThrust: 1750,        // upward accel while thrusting
+  jetRiseCap: 330,        // top climb rate under thrust
+  jetBurn: 34,            // fuel/s
+  jetRefill: 13,          // fuel/s on the ground
+  jetFuel1: 45,
+  jetFuel2: 100,
+  armorSoak: 0.45,        // damage removed by scale armor
+  medkitHeal: 45,
 };
 
-const RAW_MATERIALS = ['berry', 'ration', 'fiber', 'stone', 'ore', 'crystal', 'basekit'];
+const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'basekit'];
 
 // The sky is gentle for your first few falls; after that every death costs you a cut.
 const FREE_DEATHS = 4;
@@ -104,7 +115,7 @@ const NODE_TYPES = {
 
 const WORLD = { left: 20, right: 4000, top: 300, cloudSea: 2880, kill: 2960 };
 
-let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [];
+let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [], skyfish = [];
 let CAMP = { x: 300, y: 2500 };
 let worldSeed = 0;
 
@@ -114,7 +125,7 @@ function generateWorld(seed) {
   const R = (a, b) => a + rnd() * (b - a);
   const RI = (a, b) => Math.floor(R(a, b + 1));
 
-  rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = [];
+  rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = []; skyfish = [];
 
   const addCliff = (x, y, w, h, type, taper) => {
     const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type, taper: taper || 0 };
@@ -127,7 +138,11 @@ function generateWorld(seed) {
     addNode(type, R(r.x + 22, r.x + r.w - 22), R(r.y + 40, r.y + r.h - 30), true);
   const addLizard = (r) => {
     const x = R(r.x + 20, r.x + r.w - 20), y = R(r.y + 30, r.y + r.h - 20);
-    lizards.push({ r, x, y, tx: x, ty: y, t: R(0, 2), dir: 1 });
+    lizards.push({ r, x, y, tx: x, ty: y, t: R(0, 2), dir: 1, goneUntil: 0 });
+  };
+  // sky trout: neutral drifters in the open air between islands
+  const addSkyfish = (x, y) => {
+    skyfish.push({ home: { x, y }, x, y, t: R(0, 6), dir: 1, shy: 0, goneUntil: 0 });
   };
   const ledgeOn = (r) => {
     // a small standable shelf overlapping the face
@@ -249,6 +264,11 @@ function generateWorld(seed) {
     }
     addLizard(tower);
     if (rnd() < 0.6) addLizard(slab);
+    // trout school the gaps you glide across
+    const school = RI(1, 2);
+    for (let k = 0; k < school; k++) {
+      addSkyfish(x + (dir > 0 ? -R(90, 260) : slabW + R(90, 260)), slabTop - R(60, 260));
+    }
 
     prevRight = Math.max(prevRight, x + slabW);
     prevLeft = Math.min(prevLeft, x);
@@ -269,6 +289,10 @@ function generateWorld(seed) {
   addNode('crystal', spike.x + spike.w / 2, spike.y);
   faceNode('crystal', spike);
   addLizard(spike);
+  for (let k = 0; k < 2; k++) addSkyfish(spike.x + R(-220, 220), spike.y + R(60, 380));
+
+  // a couple of trout drift near the start island so the first ones are findable
+  for (let k = 0; k < 2; k++) addSkyfish(sx + startW * R(0.2, 1.1), groundY - R(150, 330));
 
   WORLD.top = Math.min(...rocks.map(r => r.y)) - 500;
   void lastTower;
@@ -279,25 +303,32 @@ function generateWorld(seed) {
 const ITEMS = {
   berry:   { name: 'Skyberries',   icon: 'berry-bush',     eat: 15 },
   ration:  { name: 'Trail ration', icon: 'meat',           eat: 35 },
+  medkit:  { name: 'Health kit',   icon: 'first-aid-kit',  heal: T.medkitHeal },
   fiber:   { name: 'Fiber',        icon: 'plant-roots' },
   stone:   { name: 'Stone',        icon: 'stone-block' },
   ore:     { name: 'Iron ore',     icon: 'ore' },
   crystal: { name: 'Sky crystal',  icon: 'crystal-growth' },
+  lizard:  { name: 'Cliff lizard', icon: 'gecko' },
+  skyfish: { name: 'Sky trout',    icon: 'flying-trout' },
   basekit: { name: 'Base kit',     icon: 'house', place: true },
 };
 
 const RECIPES = [
-  { id: 'gloves',   tier: 'personal', name: 'Magnetic gloves',   icon: 'gloves',          cost: { fiber: 5, stone: 4 }, desc: 'Climb granite faces.', flag: 'gloves', once: true },
-  { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },           desc: '+35 food.' },
-  { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 }, desc: 'Hold Jump to glide.', flag: 'glider', once: true },
-  { id: 'pulse',    tier: 'personal', name: 'Glove pulse',       icon: 'spiky-explosion', cost: { crystal: 1, ore: 1 }, desc: 'Tap hand: blast creatures away.', flag: 'pulse', once: true },
-  { id: 'battery1', tier: 'personal', name: 'Battery Mk1',       icon: 'battery-pack',    cost: { ore: 2, crystal: 2 }, desc: 'Energy 100 → 150.', flag: 'battery1', once: true },
-  { id: 'spikes',   tier: 'personal', name: 'Grip spikes',       icon: 'spikes',          cost: { ore: 3, stone: 2 },   desc: 'Climb basalt.', flag: 'spikes', once: true },
-  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',           cost: { stone: 6, fiber: 4 }, desc: 'Storage, recharge, respawn.' },
-  { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 }, desc: 'Heavy fabrication here.' },
-  { id: 'battery2', tier: 'mk2',      name: 'Battery Mk2',       icon: 'battery-pack',    cost: { ore: 4, crystal: 4 }, desc: 'Energy → 220.', flag: 'battery2', once: true, needs: 'battery1' },
-  { id: 'magnets',  tier: 'mk2',      name: 'Resonant magnets',  icon: 'magnet',          cost: { ore: 2, crystal: 5 }, desc: 'Climb storm rock.', flag: 'magnets', once: true, needs: 'spikes' },
-  { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'hang-glider',     cost: {},                     desc: 'Ride rising air.', locked: true },
+  { id: 'gloves',   tier: 'personal', name: 'Magnetic gloves',   icon: 'gloves',          cost: { fiber: 5, stone: 4 },              desc: 'Climb granite faces.', flag: 'gloves', once: true },
+  { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },                        desc: '+35 food.' },
+  { id: 'medkit',   tier: 'personal', name: 'Health kit',        icon: 'first-aid-kit',   cost: { fiber: 3, berry: 2 },              desc: '+45 health.' },
+  { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 },              desc: 'Hold Jump to glide.', flag: 'glider', once: true },
+  { id: 'boots',    tier: 'personal', name: 'Spring boots',      icon: 'boots',           cost: { lizard: 3, fiber: 4, stone: 2 },   desc: 'Double jump.', flag: 'boots', once: true },
+  { id: 'pulse',    tier: 'personal', name: 'Glove pulse',       icon: 'spiky-explosion', cost: { crystal: 1, ore: 1 },              desc: 'Tap hand: blast creatures away.', flag: 'pulse', once: true },
+  { id: 'battery1', tier: 'personal', name: 'Battery Mk1',       icon: 'battery-pack',    cost: { ore: 2, crystal: 2 },              desc: 'Energy 100 → 150.', flag: 'battery1', once: true },
+  { id: 'spikes',   tier: 'personal', name: 'Grip spikes',       icon: 'spikes',          cost: { ore: 3, stone: 2 },                desc: 'Climb basalt.', flag: 'spikes', once: true },
+  { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',           cost: { stone: 6, fiber: 4 },              desc: 'Storage, recharge, respawn.' },
+  { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 },              desc: 'Heavy fabrication here.' },
+  { id: 'jetpack',  tier: 'mk2',      name: 'Jetpack',           icon: 'jet-pack',        cost: { ore: 4, crystal: 3, skyfish: 2 },  desc: 'Short burst of lift. Needs Glider.', flag: 'jetpack', once: true, needs: 'glider' },
+  { id: 'jetpack2', tier: 'mk2',      name: 'Ripwing jets',      icon: 'thrust',          cost: { ore: 6, crystal: 6, skyfish: 4 },  desc: 'Bigger tank, harder push.', flag: 'jetpack2', once: true, needs: 'jetpack' },
+  { id: 'armor',    tier: 'mk2',      name: 'Scale armor',       icon: 'armor-vest',      cost: { lizard: 4, ore: 4, fiber: 3 },     desc: 'Take much less damage.', flag: 'armor', once: true },
+  { id: 'battery2', tier: 'mk2',      name: 'Battery Mk2',       icon: 'battery-pack',    cost: { ore: 4, crystal: 4 },              desc: 'Energy → 220.', flag: 'battery2', once: true, needs: 'battery1' },
+  { id: 'magnets',  tier: 'mk2',      name: 'Resonant magnets',  icon: 'magnet',          cost: { ore: 2, crystal: 5, skyfish: 2 },  desc: 'Climb storm rock.', flag: 'magnets', once: true, needs: 'spikes' },
 ];
 
 // ---------- state ----------
@@ -311,16 +342,24 @@ const player = {
   climbRect: null,
   detachTimer: 0, invuln: 0,
   hp: 100, food: 100, energy: 100, maxEnergy: 100,
+  fuel: 0, maxFuel: 0, jumps: 0,
   harvest: null,
 };
 
-const inv = { berry: 0, ration: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, basekit: 0 };
-const flags = { gloves: false, glider: false, pulse: false, battery1: false, battery2: false, spikes: false, magnets: false };
+function maxFuel() { return flags.jetpack2 ? T.jetFuel2 : flags.jetpack ? T.jetFuel1 : 0; }
+
+const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, basekit: 0 };
+const flags = {
+  gloves: false, glider: false, boots: false, pulse: false,
+  battery1: false, battery2: false, spikes: false, magnets: false,
+  jetpack: false, jetpack2: false, armor: false,
+};
 const bases = [];   // {x, y, mk2, wall, store:{}, deck:rect}
 let deaths = 0;
 let paused = false;
 let gameTime = 0;
 let pulseFx = null; // {x, y, t}
+let jumpFx = null;  // double-jump puff
 
 let clouds = [];
 function initClouds() {
@@ -354,8 +393,8 @@ document.addEventListener('touchend', e => {
   lastTouchEnd = now;
 }, { passive: false });
 
-const input = { x: 0, y: 0, jumpHeld: false, jumpPressed: false, interactHeld: false, interactPressed: false };
-const btnState = { jump: false, interact: false };
+const input = { x: 0, y: 0, jumpHeld: false, jumpPressed: false, interactHeld: false, interactPressed: false, jetHeld: false };
+const btnState = { jump: false, interact: false, jet: false };
 const keys = {};
 const joy = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
 
@@ -393,6 +432,7 @@ const btnJump = document.getElementById('btn-jump');
 const btnInteract = document.getElementById('btn-interact');
 const btnPack = document.getElementById('btn-pack');
 const btnBase = document.getElementById('btn-base');
+const btnJet = document.getElementById('btn-jet');
 
 function bindHold(el, prop) {
   el.addEventListener('pointerdown', e => {
@@ -409,6 +449,7 @@ function bindHold(el, prop) {
 }
 bindHold(btnJump, 'jump');
 bindHold(btnInteract, 'interact');
+bindHold(btnJet, 'jet');
 btnPack.addEventListener('click', () => togglePack());
 btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBase(b); });
 
@@ -434,6 +475,7 @@ function pollInput() {
   input.y = clamp(ky + jy, -1, 1);
   input.jumpHeld = btnState.jump || !!keys.Space;
   input.interactHeld = btnState.interact || !!keys.KeyE;
+  input.jetHeld = btnState.jet || !!keys.ShiftLeft || !!keys.ShiftRight;
 }
 
 // ---------- physics ----------
@@ -557,10 +599,12 @@ function updatePlayer(dt) {
 
   // --- ground / air / glide ---
   const grounded = player.state === 'ground';
+  const thrusting = flags.jetpack && input.jetHeld && player.fuel > 0 && !grounded;
 
   if (grounded) {
     player.vx = input.x * T.walkSpeed;
-    if (input.jumpPressed) { player.vy = -T.jumpVel; player.state = 'air'; }
+    player.jumps = 0;
+    if (input.jumpPressed) { player.vy = -T.jumpVel; player.state = 'air'; player.jumps = 1; }
     else if (input.y < -0.5 && tryGrab()) return; // grab a face you're standing in front of
     else if (input.y > 0.6) {
       // climb down the face of whatever you're standing on
@@ -581,6 +625,14 @@ function updatePlayer(dt) {
     player.vx = clamp(player.vx, -T.glideSpeed, T.glideSpeed);
     if (input.x === 0) player.vx *= Math.pow(0.35, dt);
 
+    // boots: one extra jump in mid-air
+    if (input.jumpPressed && flags.boots && player.jumps < 2 && !thrusting) {
+      player.vy = -T.jumpVel2;
+      player.jumps = 2;
+      player.state = 'air';
+      jumpFx = { x: player.x + P_W / 2, y: player.y + P_H, t: 0 };
+    }
+
     if (player.state === 'glide') {
       if (!input.jumpHeld || !flags.glider) player.state = 'air';
       else player.vy += (T.glideFall - player.vy) * clamp(4 * dt, 0, 1);
@@ -592,6 +644,14 @@ function updatePlayer(dt) {
         player.state = 'glide';
         player.vy = Math.min(player.vy, T.glideFall + 120);
       }
+    }
+
+    // jetpack: its own button and its own tank, so lift never competes with the glide
+    if (thrusting) {
+      player.fuel = Math.max(0, player.fuel - T.jetBurn * dt);
+      player.vy = Math.max(player.vy - T.jetThrust * dt, -T.jetRiseCap);
+      player.state = 'air';
+      player.jumps = Math.max(player.jumps, 1);
     }
     // reach up to grab a face while falling or gliding past it
     if (input.y < -0.4 && tryGrab()) return;
@@ -612,6 +672,8 @@ function updatePlayer(dt) {
     const zone = nearCampOrBase();
     player.energy += (zone ? T.regenCamp : T.regenGround) * dt;
     if (zone) lastSafe = zone;
+    player.jumps = 0;
+    player.fuel = Math.min(maxFuel(), player.fuel + T.jetRefill * dt);
   }
   player.energy = clamp(player.energy, 0, player.maxEnergy);
 }
@@ -622,6 +684,7 @@ let deathCause = null;
 
 function hurt(dmg, cause) {
   if (player.invuln > 0 || deathCause) return;
+  if (flags.armor) dmg *= (1 - T.armorSoak);
   player.hp -= dmg;
   player.invuln = T.invulnTime;
   if (player.hp <= 0) die(cause || 'The sky took you');
@@ -698,6 +761,18 @@ function nearestNode() {
   return best;
 }
 
+// Live critters you can grab by hand. They come back after a while.
+function nearestCritter() {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  let best = null, bd = 60;
+  for (const l of lizards) {
+    if (gameTime < l.goneUntil) continue;
+    const d = dist(px, py, l.x, l.y);
+    if (d < bd) { bd = d; best = { c: l, item: 'lizard' }; }
+  }
+  return best;
+}
+
 function nearestBase() {
   const px = player.x + P_W / 2, py = player.y + P_H / 2;
   for (const b of bases) if (dist(px, py, b.x, b.y) < 90) return b;
@@ -725,13 +800,30 @@ function firePulse() {
 }
 
 function updateInteraction(dt) {
-  const node = nearestNode();
+  // Nodes and lizards share the same faces — reach for whichever is actually closer.
+  const pc = playerCenter();
+  let node = nearestNode();
+  let critter = nearestCritter();
+  if (node && critter) {
+    if (dist(pc.x, pc.y, critter.c.x, critter.c.y) < dist(pc.x, pc.y, node.x, node.y)) node = null;
+    else critter = null;
+  }
 
   // a tap of the hand doubles as the pulse when something is on you
   if (input.interactPressed && flags.pulse && threatInRange(T.pulseRadius)) firePulse();
 
-  if (input.interactHeld && node) {
-    if (!player.harvest || player.harvest.node !== node) player.harvest = { node, t: 0 };
+  if (input.interactHeld && critter) {
+    if (!player.harvest || player.harvest.critter !== critter.c) player.harvest = { critter: critter.c, t: 0, total: T.captureTime };
+    player.harvest.t += dt;
+    if (player.harvest.t >= T.captureTime) {
+      inv[critter.item] += 1;
+      critter.c.goneUntil = gameTime + T.critterRespawn;
+      player.harvest = null;
+      toast('Caught a ' + ITEMS[critter.item].name.toLowerCase(), 'good', ITEMS[critter.item].icon);
+      saveGame();
+    }
+  } else if (input.interactHeld && node) {
+    if (!player.harvest || player.harvest.node !== node) player.harvest = { node, t: 0, total: T.harvestTime };
     player.harvest.t += dt;
     if (player.harvest.t >= T.harvestTime) {
       const def = NODE_TYPES[node.type];
@@ -754,10 +846,11 @@ function updateInteraction(dt) {
   if (!input.interactHeld) player._baseTapLatch = false;
 
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
-  const prog = player.harvest ? player.harvest.t / T.harvestTime : 0;
+  const prog = player.harvest ? player.harvest.t / player.harvest.total : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
-  btnInteract.classList.toggle('glide-ready', !!node);
+  btnInteract.classList.toggle('glide-ready', !!node || !!critter);
   btnBase.classList.toggle('hidden', !nearestBase());
+  btnJet.classList.toggle('hidden', !flags.jetpack);
 }
 
 // ---------- creatures ----------
@@ -822,7 +915,7 @@ function updateRazorbeaks(dt) {
       b.x += b.vx * dt; b.y += b.vy * dt;
       b.dir = b.vx > 0 ? 1 : -1;
       if (dToPlayer < 30) {
-        hurt(15, 'Torn from the wind');
+        hurt(15, 'Torn from the wind by a nightwing');
         player.vy += 260; player.vx += b.dir * 160;
         b.mode = 'rise'; b.cd = 2.5;
       } else if (b.swoopT > 2.6 || !airborne) { b.mode = 'rise'; b.cd = 1.5; }
@@ -835,12 +928,42 @@ function updateRazorbeaks(dt) {
   }
 }
 
+function updateSkyfish(dt) {
+  const pc = playerCenter();
+  for (const f of skyfish) {
+    if (gameTime < f.goneUntil) continue;
+    f.t += dt;
+    const d = dist(f.x, f.y, pc.x, pc.y);
+    // You cannot hover next to a trout, so you catch one by flying through it.
+    if (d < 32) {
+      f.goneUntil = gameTime + T.critterRespawn;
+      inv.skyfish += 1;
+      toast('Caught a sky trout', 'good', 'flying-trout');
+      saveGame();
+      continue;
+    }
+    // lazy figure-of-eight drift around home, with a small shy drift away up close
+    f.x = f.home.x + Math.sin(f.t * 0.55) * 70;
+    f.y = f.home.y + Math.sin(f.t * 1.1) * 26;
+    if (d < 90) {
+      const ang = Math.atan2(f.y - pc.y, f.x - pc.x);
+      f.home.x = clamp(f.home.x + Math.cos(ang) * 26 * dt, WORLD.left + 40, WORLD.right - 40);
+      f.home.y = clamp(f.home.y + Math.sin(ang) * 26 * dt, WORLD.top + 100, WORLD.cloudSea - 160);
+    }
+    f.dir = Math.cos(f.t * 0.55) > 0 ? 1 : -1;
+  }
+}
+
 function updateLizards(dt) {
   const pc = playerCenter();
   for (const l of lizards) {
+    if (gameTime < l.goneUntil) continue;
+    // once your hand is on it, it stops struggling — otherwise it could outrun the grab
+    if (player.harvest && player.harvest.critter === l) continue;
     l.t -= dt;
     const dp = dist(l.x, l.y, pc.x, pc.y);
-    if (dp < 70 && l.t < 1.5) {
+    // flees from closer than your reach, so a committed grab still lands
+    if (dp < 48 && l.t < 1.5) {
       // skitter away across the face
       const ang = Math.atan2(l.y - pc.y, l.x - pc.x);
       l.tx = clamp(l.x + Math.cos(ang) * 140, l.r.x + 12, l.r.x + l.r.w - 12);
@@ -854,7 +977,7 @@ function updateLizards(dt) {
     const dx = l.tx - l.x, dy = l.ty - l.y;
     const d = Math.hypot(dx, dy);
     if (d > 3) {
-      const sp = dp < 90 ? 90 : 38;
+      const sp = dp < 90 ? 78 : 38;
       l.x += dx / d * sp * dt;
       l.y += dy / d * sp * dt;
       if (Math.abs(dx) > 2) l.dir = dx > 0 ? 1 : -1;
@@ -876,8 +999,33 @@ function toast(text, kind, icon) {
   setTimeout(() => el.remove(), 2400);
 }
 
+// Crafting draws on what you carry plus the storage of every base in reach —
+// the fabricator does not care which pocket a rock is in.
+function suppliers() {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  const list = [inv];
+  for (const b of bases) {
+    if (dist(px, py, b.x, b.y) < T.campRadius) list.push(b.store);
+  }
+  return list;
+}
+
+function pooled(id) {
+  return suppliers().reduce((n, s) => n + (s[id] || 0), 0);
+}
+
 function canAfford(recipe) {
-  return Object.entries(recipe.cost).every(([k, v]) => inv[k] >= v);
+  return Object.entries(recipe.cost).every(([k, v]) => pooled(k) >= v);
+}
+
+function spend(id, count) {
+  let left = count;
+  for (const s of suppliers()) {
+    if (left <= 0) break;
+    const take = Math.min(s[id] || 0, left);
+    if (take > 0) { s[id] -= take; left -= take; if (s !== inv && s[id] <= 0) delete s[id]; }
+  }
+  return left === 0;
 }
 
 function craft(recipe, base) {
@@ -885,10 +1033,15 @@ function craft(recipe, base) {
   if (recipe.once && flags[recipe.flag]) return;
   if (recipe.needs && !flags[recipe.needs]) return;
   if (!canAfford(recipe)) { toast('Not enough materials', 'bad'); return; }
-  for (const [k, v] of Object.entries(recipe.cost)) inv[k] -= v;
+  for (const [k, v] of Object.entries(recipe.cost)) spend(k, v);
 
   if (recipe.id === 'gloves') { flags.gloves = true; toast('Gloves fitted — hold up at a face', 'good', 'gloves'); }
   if (recipe.id === 'ration') { inv.ration += 1; toast('Trail ration', 'good', 'meat'); }
+  if (recipe.id === 'medkit') { inv.medkit += 1; toast('Health kit', 'good', 'first-aid-kit'); }
+  if (recipe.id === 'boots') { flags.boots = true; toast('Spring boots — jump again in mid-air', 'good', 'boots'); }
+  if (recipe.id === 'armor') { flags.armor = true; toast('Scale armor fitted', 'good', 'armor-vest'); }
+  if (recipe.id === 'jetpack') { flags.jetpack = true; player.fuel = maxFuel(); toast('Jetpack — hold the thruster', 'good', 'jet-pack'); }
+  if (recipe.id === 'jetpack2') { flags.jetpack2 = true; player.fuel = maxFuel(); toast('Ripwing jets — bigger tank', 'good', 'thrust'); }
   if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated', 'good', 'hang-glider'); }
   if (recipe.id === 'pulse') { flags.pulse = true; toast('Glove pulse armed', 'good', 'spiky-explosion'); }
   if (recipe.id === 'spikes') { flags.spikes = true; toast('Grip spikes fitted', 'good', 'spikes'); }
@@ -902,12 +1055,20 @@ function craft(recipe, base) {
   saveGame();
 }
 
-function eatItem(id) {
+function useItem(id) {
+  const def = ITEMS[id];
   if (inv[id] <= 0) return;
+  if (def.heal && player.hp >= 100) { toast('Already unhurt', 'bad', def.icon); return; }
   inv[id] -= 1;
-  player.food = Math.min(100, player.food + ITEMS[id].eat);
-  toast('+' + ITEMS[id].eat + ' food', 'good', ITEMS[id].icon);
+  if (def.eat) {
+    player.food = Math.min(100, player.food + def.eat);
+    toast('+' + def.eat + ' food', 'good', def.icon);
+  } else if (def.heal) {
+    player.hp = Math.min(100, player.hp + def.heal);
+    toast('+' + def.heal + ' health', 'good', def.icon);
+  }
   renderPack();
+  saveGame();
 }
 
 function makeWallDeck(base) {
@@ -985,8 +1146,10 @@ function saveGame() {
       gameTime,
       player: {
         x: player.x, y: player.y, hp: player.hp, food: player.food,
-        energy: player.energy, maxEnergy: player.maxEnergy,
+        energy: player.energy, maxEnergy: player.maxEnergy, fuel: player.fuel,
       },
+      lizards: lizards.map(l => Math.max(0, l.goneUntil - gameTime)),
+      skyfish: skyfish.map(f => Math.max(0, f.goneUntil - gameTime)),
       inv, flags,
       bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, wall: !!b.wall, store: b.store || {} })),
       lastSafe: bases.indexOf(lastSafe),
@@ -1020,6 +1183,9 @@ function loadGame() {
   lastSafe = li >= 0 && bases[li] ? bases[li] : CAMP;
   deaths = data.deaths || 0;
   if (data.nodes) NODES.forEach((n, i) => { n.depletedUntil = gameTime + (data.nodes[i] || 0); });
+  if (data.lizards) lizards.forEach((l, i) => { l.goneUntil = gameTime + (data.lizards[i] || 0); });
+  if (data.skyfish) skyfish.forEach((f, i) => { f.goneUntil = gameTime + (data.skyfish[i] || 0); });
+  player.fuel = clamp(player.fuel || 0, 0, maxFuel());
   return true;
 }
 
@@ -1056,8 +1222,10 @@ function togglePack() {
 
 function costHTML(recipe) {
   return Object.entries(recipe.cost).map(([k, v]) => {
-    const lack = inv[k] < v ? ' lack' : '';
-    return '<span class="' + lack + '"><span class="c-icon">' + svgIcon(ITEMS[k].icon) + '</span>' + inv[k] + '/' + v + '</span>';
+    const have = pooled(k);
+    const lack = have < v ? ' lack' : '';
+    const fromStore = have > (inv[k] || 0) ? ' title="includes nearby base storage"' : '';
+    return '<span class="' + lack + '"' + fromStore + '><span class="c-icon">' + svgIcon(ITEMS[k].icon) + '</span>' + have + '/' + v + '</span>';
   }).join('');
 }
 
@@ -1106,8 +1274,8 @@ function renderPack() {
   for (const [id, def] of Object.entries(ITEMS)) {
     if (inv[id] <= 0) continue;
     any = true;
-    const use = def.eat ? () => eatItem(id) : def.place ? placeBase : null;
-    grid.appendChild(invTile(id, def, inv[id], use, def.eat ? 'Eat' : 'Place'));
+    const use = (def.eat || def.heal) ? () => useItem(id) : def.place ? placeBase : null;
+    grid.appendChild(invTile(id, def, inv[id], use, def.heal ? 'Use' : def.eat ? 'Eat' : 'Place'));
   }
   if (!any) grid.innerHTML = '<div class="inv-empty">Empty</div>';
 
@@ -1126,11 +1294,17 @@ const CHEATS = {
   gear() {
     for (const k of Object.keys(flags)) flags[k] = true;
     player.maxEnergy = 220; player.energy = 220;
+    player.fuel = maxFuel();
     toast('All gear unlocked', 'good', 'gloves');
   },
   vitals() {
     player.hp = 100; player.food = 100; player.energy = player.maxEnergy;
+    player.fuel = maxFuel();
     toast('Vitals refilled', 'good', 'hearts');
+  },
+  critters() {
+    inv.lizard += 10; inv.skyfish += 10;
+    toast('+10 lizards, +10 trout', 'good', 'cage');
   },
   kit() {
     inv.basekit += 3;
@@ -1223,6 +1397,8 @@ resetBtn.addEventListener('click', () => {
 document.querySelector('#bar-health .bar-icon').innerHTML = svgIcon('hearts');
 document.querySelector('#bar-food .bar-icon').innerHTML = svgIcon('meat');
 document.querySelector('#bar-energy .bar-icon').innerHTML = svgIcon('power-lightning');
+document.querySelector('#bar-fuel .bar-icon').innerHTML = svgIcon('fuel-tank');
+document.querySelector('#btn-jet .abtn-icon').innerHTML = svgIcon('jet-pack');
 document.querySelector('#version-badge .badge-icon').innerHTML = svgIcon('mountain-climbing');
 document.getElementById('version-text').textContent = 'v' + GAME_VERSION;
 document.querySelector('#btn-pack .abtn-icon').innerHTML = svgIcon('knapsack');
@@ -1240,8 +1416,15 @@ function updateHUD() {
   document.getElementById('bar-health').classList.toggle('warn', player.hp < 25);
   document.getElementById('bar-food').classList.toggle('warn', player.food < 20);
   document.getElementById('bar-energy').classList.toggle('warn', player.energy < player.maxEnergy * 0.2);
-  // glove energy means nothing until you have gloves
+  // glove energy means nothing until you have gloves; same for jet fuel
   document.getElementById('bar-energy').classList.toggle('hidden', !flags.gloves);
+  const fuelBar = document.getElementById('bar-fuel');
+  fuelBar.classList.toggle('hidden', !flags.jetpack);
+  if (flags.jetpack) {
+    fuelBar.querySelector('.bar-fill').style.width = (player.fuel / maxFuel() * 100) + '%';
+    fuelBar.classList.toggle('warn', player.fuel < maxFuel() * 0.2);
+  }
+  btnJet.classList.toggle('glide-ready', flags.jetpack && player.fuel > 0);
 
   const jumpIcon = document.querySelector('#btn-jump .abtn-icon');
   const want = (player.state === 'glide' || (flags.glider && player.state === 'air')) ? 'hang-glider' : 'jump-across';
@@ -1406,13 +1589,46 @@ function render() {
     }
   }
 
-  // lizards — neutral, live on the faces
+  // lizards — neutral, live on the faces, catchable
   for (const l of lizards) {
+    if (gameTime < l.goneUntil) continue;
     ctx.save();
     ctx.translate(l.x, l.y);
     if (l.dir < 0) ctx.scale(-1, 1);
     drawIcon(ctx, 'gecko', 0, 0, 24, '#8fce7a', 0.9);
     ctx.restore();
+  }
+
+  // sky trout — neutral drifters, catchable
+  for (const f of skyfish) {
+    if (gameTime < f.goneUntil) continue;
+    ctx.save();
+    ctx.translate(f.x, f.y + Math.sin(gameTime * 2 + f.home.x) * 3);
+    if (f.dir < 0) ctx.scale(-1, 1);
+    drawIcon(ctx, 'flying-trout', 0, 0, 30, '#8fd8e8', 0.92);
+    ctx.restore();
+    // faint halo marking the fly-through catch radius
+    ctx.save();
+    ctx.globalAlpha = 0.18 + Math.sin(gameTime * 3 + f.home.x) * 0.06;
+    ctx.strokeStyle = '#8fd8e8'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(f.x, f.y, 30, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // catch/harvest ring on a live critter
+  if (player.harvest && player.harvest.critter) {
+    const c = player.harvest.critter;
+    ctx.strokeStyle = '#8fe3ff'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (player.harvest.t / player.harvest.total));
+    ctx.stroke();
+  }
+
+  // double-jump puff
+  if (jumpFx) {
+    ctx.strokeStyle = 'rgba(200,225,255,' + (1 - jumpFx.t / 0.3) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(jumpFx.x, jumpFx.y, 10 + jumpFx.t * 70, 5 + jumpFx.t * 22, 0, 0, Math.PI * 2); ctx.stroke();
   }
 
   // stingwing nests + wasps
@@ -1432,7 +1648,7 @@ function render() {
     ctx.save();
     ctx.translate(b.x, b.y);
     if (b.dir < 0) ctx.scale(-1, 1);
-    drawIcon(ctx, 'vulture', 0, 0, 44, b.mode === 'swoop' ? '#6b4a66' : '#4a3b52');
+    drawIcon(ctx, 'bat', 0, 0, 42, b.mode === 'swoop' ? '#8a5a86' : '#5b4566');
     ctx.restore();
   }
 
@@ -1500,8 +1716,27 @@ function drawPlayer() {
     ctx.moveTo(cx + 22, py - 7); ctx.lineTo(cx + 6, py + 12);
     ctx.stroke();
   }
-  ctx.fillStyle = '#2c3e63';
+  // jet exhaust
+  if (flags.jetpack && input.jetHeld && player.fuel > 0 && player.state !== 'ground' && player.state !== 'climb') {
+    const flick = 14 + Math.random() * 16;
+    const gr = ctx.createLinearGradient(0, py + P_H, 0, py + P_H + flick);
+    gr.addColorStop(0, 'rgba(255,214,107,0.95)');
+    gr.addColorStop(1, 'rgba(255,120,60,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.moveTo(px + 5, py + P_H - 2);
+    ctx.lineTo(px + P_W - 5, py + P_H - 2);
+    ctx.lineTo(cx, py + P_H + flick);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.fillStyle = flags.armor ? '#3a5680' : '#2c3e63';
   roundRect(px + 3, py + 12, P_W - 6, P_H - 14, 7);
+  if (flags.armor) {
+    ctx.fillStyle = '#8fb4e8';
+    ctx.fillRect(px + 6, py + 18, P_W - 12, 3);
+  }
   ctx.fillStyle = '#e8c39a';
   ctx.beginPath(); ctx.arc(cx, py + 8, 8, 0, Math.PI * 2); ctx.fill();
 
@@ -1549,7 +1784,9 @@ function frame(now) {
     updateStingwings(dt);
     updateRazorbeaks(dt);
     updateLizards(dt);
+    updateSkyfish(dt);
     if (pulseFx) { pulseFx.t += dt; if (pulseFx.t > 0.45) pulseFx = null; }
+    if (jumpFx) { jumpFx.t += dt; if (jumpFx.t > 0.3) jumpFx = null; }
     for (const c of clouds) {
       c.x += c.v * dt;
       if (c.x > WORLD.right + 250) c.x = -200;
@@ -1583,7 +1820,7 @@ initClouds();
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Ground Up', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Livestock', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -1593,11 +1830,16 @@ window.SKYREACH = {
   saveGame, loadGame, generateWorld, CHEATS,
   get deaths() { return deaths; },
   set deaths(v) { deaths = v; },
+  get paused() { return paused; },
+  get gameTime() { return gameTime; },
+  get deathCause() { return deathCause; },
   get rocks() { return rocks; },
   get nodes() { return NODES; },
   get stingwings() { return stingwings; },
   get razorbeaks() { return razorbeaks; },
   get lizards() { return lizards; },
+  get skyfish() { return skyfish; },
+  maxFuel,
   get camp() { return CAMP; },
   get seed() { return worldSeed; },
   getLastSafe: () => lastSafe,

@@ -2,6 +2,15 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.5.0 — Livestock (2026-07-26)
+
+- Fabricators draw materials from your pack AND the storage of any base in range
+- Catch cliff lizards and sky trout — both respawn after a while
+- Lizards and trout are recipe ingredients: boots, armor, jets and magnets need them
+- Jetpack (needs Glider) adds a short fuel bar and a thruster button; Ripwing jets double the tank
+- Spring boots: double jump. Scale armor: take 45% less damage. Health kit: +45 health
+- Flying predators are now nightwings (bat)
+
 ## v0.4.0 — Ground Up (2026-07-26)
 
 - You start with bare hands — gather on foot and fabricate Magnetic gloves before any cliff will take you

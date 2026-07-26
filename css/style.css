@@ -46,6 +46,8 @@ svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 #bar-health { color: #ff5d6c; } #bar-health .bar-fill { background: #ff5d6c; }
 #bar-food   { color: #ffb454; } #bar-food .bar-fill   { background: #ffb454; }
 #bar-energy { color: #59d7ff; } #bar-energy .bar-fill { background: #59d7ff; }
+#bar-fuel   { color: #ffd76b; } #bar-fuel .bar-fill   { background: #ffd76b; }
+#bar-fuel .bar-track { width: 90px; }
 .bar.warn .bar-track { animation: warnblink .5s steps(2) infinite; }
 @keyframes warnblink { to { border-color: #ff5d6c; } }
 
@@ -127,6 +129,8 @@ svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 .abtn.big { width: 74px; height: 74px; }
 .abtn.hidden { display: none; }
 #btn-base { border-color: rgba(143, 199, 255, .65); color: #8fc7ff; }
+#btn-jet { border-color: rgba(255, 215, 107, .65); color: #ffd76b; }
+#btn-jet.held { background: rgba(255, 168, 60, .5); color: #fff; }
 .abtn:active, .abtn.held { background: rgba(89, 160, 255, .45); color: #fff; }
 .abtn-icon { position: absolute; inset: 22%; pointer-events: none; }
 .abtn.glide-ready { color: #8fe3ff; border-color: rgba(143, 227, 255, .6); }

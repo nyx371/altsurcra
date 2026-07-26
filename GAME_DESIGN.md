@@ -44,6 +44,8 @@ Session shape (target 3–10 min): leave a safe ledge with full energy, execute 
   - **Energy hits 0 → gloves release → you fall.** This is the core tension.
 - **Detach** deliberately (jump off the wall) to fall or start a glide.
 - **Glide** (requires crafted Glider): hold the glide button while airborne to deploy. Slow descent, good horizontal speed, steerable. Gliding costs nothing — altitude is the currency you spend.
+- **Double jump [v0.5]**: Spring boots give one extra mid-air jump (~+80px). Cheap, always available, no resource — it makes ordinary terrain traversal feel good and softens missed hops.
+- **Jetpack [v0.5]**: a short burst of powered lift on **its own button and its own small fuel bar** — deliberately *not* the glide button and *not* glove energy. Jet fuel only refills on solid ground, so it is an escape hatch and a reach-extender, not flight: about 1.3s of thrust at first (Ripwing jets roughly doubles it). Keeping it on a separate tank means using it never eats the energy you need to finish a climb — the two resources answer different questions ("can I get up this wall?" vs "can I save this fall?").
 - **Falling** onto rock from height causes damage. Falling off the bottom of the world into the cloud sea is death (later: recoverable with a late-game item).
 
 ### 4.2 Vitals **[v0.1]**
@@ -118,6 +120,8 @@ Subnautica works because the depths *ask questions*. Ours: intermittent signal p
 - **Fabricator Mk2** **[v0.1: buildable, recipes teased]**: must be built inside a base. Unlocks gear-tier recipes (better batteries, wings, tools). Powerful crafting is anchored to *place*, giving bases a reason to exist.
 - **Fabricator Mk3** [later]: endgame tier, requires high-band materials and possibly power infrastructure.
 
+**Shared stock [v0.5].** Any fabricator draws on your pack **plus the storage of every base within range**, and spends what you carry first. The fabricator does not care which pocket a rock is in, and making the player shuttle items out of a chest they're standing next to was pure friction. Costs in the recipe list show the pooled total, so a base you're standing in visibly makes more things buildable. Out of range it stops counting, which quietly rewards building bases where you actually work.
+
 ### 6.3 Recipes **[v0.1]**
 
 Personal fabricator:
@@ -140,8 +144,10 @@ Base (at a placed base, with Mk2 built):
 
 ### 6.4 Progression skeleton
 
-Reach is gated by grip, energy ceiling and glide tech, not by artificial walls:
-`bare hands (hills only) → Magnetic gloves → Glider → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Battery Mk2 → Resonant magnets (storm rock) → …`
+Reach is gated by grip, energy ceiling and air tech, not by artificial walls:
+`bare hands (hills only) → Magnetic gloves → Glider → Spring boots → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Jetpack → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → …`
+
+Note that livestock gates the *survivability* branch (boots, armor) and trout gate the *air* branch (jets, magnets), so both catching mechanics sit on the critical path rather than being optional flavour.
 
 ### 6.5 Playtest cheats **[v0.4]**
 
@@ -163,12 +169,19 @@ Threat design rule: threats attack your *position and energy*, not just your hea
 ### 8.1 Current threats
 
 - **Stingwing** (wasp-sting icon): territorial hoverer nesting on cliffs. Chases when you climb into its radius; hits do damage **and knock you off the wall**. Counterplay: route around, bait it out — or **Glove pulse** it.
-- **Razorbeak** (vulture icon): patrols open sky between islands; dives at gliding players. Counterplay: watch its patrol, time your launch, drop altitude to break the dive — or pulse it mid-dive.
+- **Nightwing** (bat icon): patrols open sky between islands; dives at gliding players. Counterplay: watch its patrol, time your launch, drop altitude to break the dive — or pulse it mid-dive.
 - **Glove pulse [v0.3]**: a cheap craftable magnetic burst on the hand button. Costs glove energy (the same resource climbing needs), so self-defense on a wall spends your safety margin — defense is a budgeting decision, not a free action.
 
-### 8.1½ Neutral life **[v0.3]**
+### 8.1½ Neutral life — and livestock **[v0.5]**
 
-- **Cliff lizards** (gecko icon): live on the faces, wander them, skitter away when you get close. Harmless. The wall is a biome, so most of what lives there shouldn't want to kill you — later: scannable, maybe a food chain (Razorbeaks hunting lizards).
+The wall is a biome, so most of what lives there shouldn't want to kill you. Both neutral species are **catchable, respawning livestock** and both are crafting inputs, which turns wildlife from scenery into a renewable resource layer:
+
+- **Cliff lizards** (gecko icon): live on the faces and skitter away when you get close. Caught by **holding the hand button** while you grip the wall next to one. They flee from *inside* your reach radius, so a committed grab lands but a lazy one doesn't — and once your hand is on one it stops struggling. Scales go into **Spring boots** and **Scale armor**.
+- **Sky trout** (flying-trout icon): drift in the open air between islands. You cannot hover next to one, so hold-to-catch would be impossible — instead you **catch them by flying through them**, which makes a glide across a gap into a fishing run. A faint halo shows the catch radius. They go into **Jetpack**, **Ripwing jets** and **Resonant magnets**.
+
+Both respawn on a timer (90s) at their home spot, so a patch of wall or sky is a farm you come back to rather than a resource you strip.
+
+**Design note:** capture is the first mechanic that rewards *stopping* on a wall rather than racing up it, which is exactly the behaviour the cheap idle-hang cost (4.1) was meant to enable.
 
 ### 8.2 Later
 
@@ -195,10 +208,11 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.1 — First Climb** *(this build)*: core movement (walk/climb/glide), energy, vitals, harvest, personal fabricator, 4 recipes, base kit + Mk2 teaser, 2 threats, 2 islands, version/changelog UI.
 - **0.2 — Homestead**: cliff-wall base placement with standable decks, base storage, material-drop death with recoverable caches, respawn at last base, autosave to localStorage, cheaper idle hang.
 - **0.3 — Open Sky**: non-blocking climbable cliff *faces* (walk past, grab anywhere, free 2D wall movement, climb down from tops), seeded world remix per run, rock tiers gated by gear (granite/basalt/storm rock), Glove pulse defense, neutral cliff lizards, tutorial layer removed.
-- **0.4 — Ground Up** *(current build)*: climbing must be crafted, jumpable hills and stepped shelves, percentage death toll after a grace period (no world caches), playtest cheats, compact inventory.
-- **0.4 — The Shear**: wind during glides, thermal wing, new materials + wind-tech recipes, richer generation (caves? overhangs?).
-- **0.5 — Alive Sky**: creature AI pass, nest ecology, day/night, scannable life.
-- **0.6 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
+- **0.4 — Ground Up**: climbing must be crafted, jumpable hills and stepped shelves, percentage death toll after a grace period (no world caches), playtest cheats, compact inventory.
+- **0.5 — Livestock** *(current build)*: pooled crafting across pack and nearby base storage, catchable respawning lizards and sky trout as recipe inputs, jetpack + Ripwing jets on a separate fuel bar, Spring boots (double jump), Scale armor, health kits, bats replace vultures.
+- **0.6 — The Shear**: wind during glides, thermal wing, new materials + wind-tech recipes, richer generation (caves? overhangs?).
+- **0.7 — Alive Sky**: predator/prey ecology (bats hunting trout?), nests, day/night, scannable life.
+- **0.8 — The Signal**: mystery spine beat 1, scanner tool, discovery log.
 
 ## 12. Design questions
 

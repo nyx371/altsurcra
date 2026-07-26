@@ -1,8 +1,21 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.4.0';
+const GAME_VERSION = '0.5.0';
 
 const CHANGELOG = [
+  {
+    version: '0.5.0',
+    name: 'Livestock',
+    date: '2026-07-26',
+    notes: [
+      'Fabricators draw materials from your pack AND the storage of any base in range',
+      'Catch cliff lizards and sky trout by hand — both respawn after a while',
+      'Lizards and trout are recipe ingredients: boots, armor, jets and magnets need them',
+      'Jetpack (needs Glider) adds a short fuel bar and a thruster button; Ripwing jets double the tank',
+      'Spring boots: double jump. Scale armor: take 45% less damage. Health kit: +45 health',
+      'Flying predators are now nightwings (bat)',
+    ],
+  },
   {
     version: '0.4.0',
     name: 'Ground Up',

@@ -19,7 +19,8 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Grab a cliff face / climb | hold up while in front of one | W / up |
 | Climb down from a top | hold down | S / down |
 | Jump · hold to glide (needs Glider) | right big button | Space |
-| Harvest (hold) · Glove pulse (tap, once crafted) | hand button | E |
+| Harvest / catch a lizard (hold) · Glove pulse (tap, once crafted) | hand button | E |
+| Jetpack thrust (hold, once crafted) | thruster button | Shift |
 | Enter base | house button (appears in range) | E |
 | Pack + personal fabricator | knapsack button | C |
 | Changelog + wipe save / remix world | version badge (top right) | — |
@@ -32,7 +33,11 @@ The pack has a **Playtest cheats** row (materials, base kits, unlock gear, refil
 
 ## The world
 
-Every new game generates a fresh island chain from a random seed — resuming keeps your world, wiping the save remixes it. There are no guided goals: explore, harvest, craft, and push upward. Stingwings guard cliffs and Razorbeaks patrol the gaps (craft the **Glove pulse** and tap the hand button to drive them off); neutral lizards just live on the rock.
+Every new game generates a fresh island chain from a random seed — resuming keeps your world, wiping the save remixes it. There are no guided goals: explore, harvest, craft, and push upward. Stingwings guard cliffs and nightwings patrol the gaps; craft the **Glove pulse** and tap the hand button to drive them off.
+
+Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to catch one, and **sky trout** are caught by gliding straight through them. Both respawn, and both are crafting inputs — lizards for Spring boots and Scale armor, trout for the Jetpack and Resonant magnets.
+
+Fabricators pool materials from your pack **and** the storage of any base you're standing in, so you never have to shuttle rocks out of a chest you're next to.
 
 Progress autosaves to your device.
 
