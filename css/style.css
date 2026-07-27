@@ -166,6 +166,7 @@ body.menu-open #weather { display: none; }
 /* contextual buttons live above, in fixed cells of their own */
 #btn-release  { grid-area: 1 / 3; }
 #btn-zip      { grid-area: 1 / 2; }
+#btn-feed     { grid-area: 1 / 1; }
 #btn-jet      { grid-area: 2 / 3; }
 #btn-base     { grid-area: 2 / 2; }
 #btn-visor    { grid-area: 2 / 1; }
@@ -188,6 +189,14 @@ body.menu-open #weather { display: none; }
 #btn-visor.on { background: rgba(120, 255, 190, .3); color: #fff; }
 #btn-zip { border-color: rgba(199, 214, 238, .7); color: #c7d6ee; }
 #btn-zip.on { background: rgba(159, 182, 216, .45); color: #fff; }
+#btn-feed { border-color: rgba(224, 138, 90, .7); color: #e0a07a; }
+/* armed jetpack: jump is now the trigger, so say so on the jump button */
+#btn-jump.thrusting { border-color: rgba(255, 215, 107, .75); color: #ffd76b; }
+#btn-jet.firing { background: rgba(255, 168, 60, .55); color: #fff; }
+
+/* survey view: nothing to press but the visor itself, so clear the deck */
+body.surveying .abtn:not(#btn-visor) { display: none; }
+body.surveying #stick-zone { z-index: 12; }
 .abtn:active, .abtn.held { background: rgba(89, 160, 255, .45); color: #fff; }
 .abtn-icon { position: absolute; inset: 22%; pointer-events: none; }
 .abtn.glide-ready { color: #8fe3ff; border-color: rgba(143, 227, 255, .6); }

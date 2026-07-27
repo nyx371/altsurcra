@@ -151,6 +151,20 @@ This exists because the pillars pull hard toward "only up", and a world where th
 
 **[v0.1] contains:** Haven Rock (starter island, Band 0) with a practice cliff, and Skyshard Spire (Band 1) across a glide gap, with ore and crystal on its face and both threat types guarding it.
 
+### 5.1½ The drift — endless sky **[v0.13]**
+
+The island chain is an authored run: a start island, five bands climbing away from it, outposts on the flanks, a summit spike with an ending on top. Past either edge of it, the sky keeps going.
+
+**How it works.** The world is divided into 1500px columns. Any column that lies entirely outside the authored world is a **drift chunk**, generated on demand from `mulberry32(worldSeed ^ chunkIndex)` when you come within two chunks of it. Each holds one or two islands with a tower, shelves, hills, nodes, wildlife and a thermal. Because the hash is per chunk, the drift is fully deterministic: the same seed always grows the same sky, and chunks can be generated in any order. The save stores the list of chunks you have visited and replays it on load, which is what lets per-node state (stripped, tamed, cut) line up afterwards.
+
+**It escalates.** Distance from the core drives a `far` term that raises the chance of basalt and then storm rock, adds crystal and skysteel to the faces, and thickens the wildlife. Flying west for ten minutes is not a flat corridor of the same island — it is a difficulty gradient you chose to walk into, gated by the same climbing gear as the main chain.
+
+**Why endless at all.** The authored chain answers *how high can you get*; the drift answers *how far can you get*, and it exists because finite resources (4.4) gave the horizontal question real stakes. Once a stretch of sky is stripped, "somewhere else" has to be a real place. It also makes the glider, the jetpack and the thermal wing into travel gear rather than terrain-crossing gear.
+
+**What it deliberately does not contain:** relics. Those are trophies with a fixed economy (three buys the Relic core), and an endless supply of them would turn the top energy tier into a grind rather than a decision.
+
+**Cost control.** Rock, creatures and effects are culled from rendering when off-camera, and creatures outside a 2600px simulation radius stop ticking entirely, so a session that has generated a hundred islands runs at the same speed as one that has generated three.
+
 ### 5.2 Why go up? (mystery spine)
 
 Subnautica works because the depths *ask questions*. Ours: intermittent signal pulses from above the Ceiling; ruins bolted to undersides of high islands; the question of why the islands float at all. Concrete story beats TBD with design input — the systems don't depend on it yet.
@@ -275,11 +289,13 @@ A map button in the HUD opens a chart of the whole world with **fog of war**: is
 
 The world is ~8000px wide with outposts on both flanks; without this, "where am I and where was that thing" was a real and growing problem.
 
-## 7½. The field log **[v0.8]**
+## 7½. The field log **[v0.8, passive from v0.13]**
 
-The **Field scanner** is a cheap early craftable. Hold the hand on anything you have not logged — a rock type, a creature, a thermal, a relic vault — and it goes into an 11-entry **field log** with a line of flavour that is also a hint (*"Schools thicken before a storm"*, *"Lightning finds it, and so do magnets"*).
+The **Field scanner** is a cheap early craftable. Once it is built, anything you have not logged — a rock type, a creature, a thermal, a relic vault, a patch of razor shale — writes itself into a 13-entry **field log** the moment you take it, touch it, grip it or fly through it, with a line of flavour that is also a hint (*"Schools thicken before a storm"*, *"Lightning finds it, and so do magnets"*).
 
-This is the Subnautica databank, and it does three jobs: it gives the open world something to *complete* now that the goal ticker is gone, it teaches systems through observation rather than tutorial text, and it makes stopping to look at things a rewarded action in a game otherwise about spending energy efficiently. Progress shows in the pack; the log is its own panel.
+This is the Subnautica databank, and it does three jobs: it gives the open world something to *complete* now that the goal ticker is gone, it teaches systems through observation rather than tutorial text, and it rewards going somewhere new. Progress shows in the pack; the log is its own panel.
+
+**Passive since v0.13.** It used to be a hold-the-hand action on each new thing. That was a button press taxing a discovery you had already made — you had found the creature, identified it by eye, and then had to stand still and confirm it to the game. Worse, it competed with the hand's real jobs and could hijack a harvest. Now the *finding* is the whole interaction, which is where the interest always was, and the log fills in as a record of where you have been rather than a checklist you tick.
 
 ## 7¾. Ending a run **[v0.8]**
 
@@ -326,7 +342,8 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 ## 9. Controls (mobile) **[v0.1, layout fixed in v0.7]**
 
 - **Left thumb:** virtual joystick — walk, steer climbs, steer glides.
-- **Right thumb:** a **fixed 3x3 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot/feed), **Jump/Glide**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left, and the **cable** button (mount/drop a zipline) top-centre. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
+- **Right thumb:** a **fixed 3x3 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot), **Jump/Glide/Thrust**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left, the **cable** button top-centre and the **feed** button top-left. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
+- **One action per button [v0.13].** Feeding moved off the hand and onto its own button, because a hand that harvests, catches, loots, robs *and* feeds has to guess, and guessing wrong costs you a berry or a climb. Anything with a target of its own gets a button of its own.
 - **Vital bars sit above the menus [v0.7]**, with a dark backing while one is open — you decide what to eat or craft *because* of what your health and energy say, so hiding them behind the pack was backwards.
 - Keyboard supported for desktop playtesting: WASD/arrows, Space (jump/hold to glide), E (interact), C (pack).
 - Portrait and landscape both work; canvas scales to viewport.
@@ -334,6 +351,18 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 ## 9½. Sound **[v0.9]**
 
 Everything is synthesised with WebAudio — no asset loads, which keeps the whole game a handful of static files. The bed is filtered noise whose level and cutoff track **altitude, airspeed and storms**, so height is audible before it is visible. A sawtooth hum runs only while you are gripping rock and changes pitch by feature (low on a rest ledge, high and thin on slick rock), which makes the climbing state legible without looking. Everything else is short synth blips: grab, jump, land, harvest, scan, craft, discovery, damage, crumble, thunder, beacon. Muted from a HUD toggle, and the preference is saved.
+
+## 9⅔. Arming, not holding **[v0.13]**
+
+The jetpack has been a hold (v0.5), then a latch (v0.7), and is now **armed with the thruster button and fired with jump**. The latch was better than the hold — three thumbs is not a control scheme — but it made the thruster a mode you had to remember you were in, and it fought the glider for the same airspace.
+
+Arm-then-jump fixes both. Arming is a deliberate state you set once; firing uses the button your thumb is already on and never competes for a finger with steering. While armed, holding jump thrusts *instead of* gliding, so the two ways of staying up are explicitly switched between rather than silently blended — and disarming is how you say "I want to glide now". It stays armed through landings and grabs, because the whole point of a mode is that you do not have to re-set it every time you touch rock. It still cuts out on an empty tank.
+
+## 9⅘. The survey view **[v0.13]**
+
+The Range visor used to be a zoom you could fly with. Now, **while you are standing or hanging still**, it is a survey view: the stick pans the camera up to 3400px in any direction, and every button except the visor itself clears off the screen. Mid-air it goes back to being a plain wide zoom, because taking the controls away from someone who is falling is not a feature.
+
+The rule "pan only when you have stopped" is what makes it safe to hand the stick to the camera. It also states the tool's purpose out loud: reading a route is something you do *before* committing, from somewhere you are not going to fall off.
 
 ## 9¾. Camera **[v0.9, retuned v0.12]**
 
@@ -363,8 +392,9 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.9 — Reading the Rock**: route features on every face, the sky chart with fog of war, discovery-gated recipes, procedural audio, camera look-ahead, a far wider visor, and no ridgerunner on the start island.
 - **0.10 — Thorn and Shale**: rock-blended feature colours, razor shale that cuts, genuinely slippery slick rock, thorn gating cliff tops, the Thorn hook, and a searchable wreck at camp.
 - **0.11 — Cable and Seed**: islands roughly doubled in size, resources no longer respawn, base planters as the renewable economy, motorised two-way ziplines, tameable ridgerunners, and far less thorn on the start island.
-- **0.12 — Stocktake** *(current build)*: the Survey lens (counts and tracks what is left on the rock), deposit markers on the sky chart, and a closer default camera.
-- **0.13 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **0.12 — Stocktake**: the Survey lens (counts and tracks what is left on the rock), deposit markers on the sky chart, and a closer default camera.
+- **0.13 — The Drift** *(current build)*: endless procedural islands past either edge of the authored chain, a dedicated feed button, a passive scanner, the visor as a pannable survey view, and the jetpack rebuilt around arm-then-jump.
+- **0.14 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
 - **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions

@@ -89,6 +89,8 @@ const T = {
   // The visor is a multiplier on the base scale, so it is retuned whenever the
   // default zoom moves — the point is a fixed amount of *world* on screen.
   visorZoom: 0.136,       // camera scale multiplier while the visor is up
+  visorPan: 2400,         // world px/s the stick pans the camera while surveying
+  visorPanMax: 3400,      // how far from yourself the survey view can wander
   lookAhead: 0.55,        // how far the camera leads your velocity
   lookAheadMax: 320,
   runnerSpeed: 96,
@@ -584,11 +586,145 @@ function generateWorld(seed) {
     }
   }
 
-  WORLD.top = Math.min(...rocks.map(r => r.y)) - 500;
-  // negative coordinates are fine — outposts spread west of the start island
-  WORLD.left = Math.min(...rocks.map(r => r.x)) - 420;
-  WORLD.right = Math.max(...rocks.map(r => r.x + r.w)) + 420;
+  CORE.left = Math.min(...rocks.map(r => r.x));
+  CORE.right = Math.max(...rocks.map(r => r.x + r.w));
+  driftChunks.length = 0;
+  driftSet.clear();
+  recomputeBounds();
   void lastTower;
+}
+
+// ---------- the drift: endless procedural islands east and west ----------
+// The authored chain is a designed run with a beginning and an end. Past either
+// edge of it the sky just keeps going: chunks of island generated on demand from
+// the world seed, so flying west for an hour is a real thing you can do and the
+// same seed always produces the same sky.
+
+const CHUNK_W = 1500;
+const DRIFT_TOP = 500;   // fixed ceiling for drift islands: generation must not
+                         // depend on WORLD.top, which grows as chunks appear
+const driftChunks = [];        // chunk indices, in the order they were generated
+const driftSet = new Set();
+const CORE = { left: 0, right: 0 };
+
+// Plain loop, not Math.min(...spread): the drift makes `rocks` unbounded and a
+// spread of a very large array is an argument-count crash waiting to happen.
+function recomputeBounds() {
+  let top = Infinity, left = Infinity, right = -Infinity;
+  for (const r of rocks) {
+    if (r.y < top) top = r.y;
+    if (r.x < left) left = r.x;
+    if (r.x + r.w > right) right = r.x + r.w;
+  }
+  WORLD.top = top - 500;
+  // negative coordinates are fine — the drift spreads west of the start island
+  WORLD.left = left - 420;
+  WORLD.right = right + 420;
+}
+
+// a chunk only exists where the authored world does not
+function chunkIsDrift(i) {
+  return (i + 1) * CHUNK_W <= CORE.left + 200 || i * CHUNK_W >= CORE.right - 200;
+}
+
+function buildDriftChunk(i) {
+  if (driftSet.has(i) || !chunkIsDrift(i)) return false;
+  driftSet.add(i);
+  driftChunks.push(i);
+
+  // hashed off the world seed, so the same chunk is the same island every time
+  const rnd = mulberry32((worldSeed ^ (i * 0x9E3779B1)) >>> 0);
+  const R = (a, b) => a + rnd() * (b - a);
+  const RI = (a, b) => Math.floor(R(a, b + 1));
+  const out = i < 0 ? -1 : 1;
+  // how far out you are decides how mean the rock gets — the drift has tiers too
+  const far = Math.min(1, Math.abs(i) / 14);
+  const type = rnd() < far * 0.45 ? 'stormrock' : rnd() < 0.3 + far * 0.4 ? 'basalt' : 'granite';
+
+  const addCliff = (x, y, w, h, t, taper) => {
+    const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type: t, taper: taper || 0, drift: true };
+    r.features = faceFeatures(r, rnd);
+    rocks.push(r);
+    return r;
+  };
+  const addNode = (t, x, y, wall) =>
+    NODES.push({ type: t, x: Math.round(x), y: Math.round(y), wall: !!wall, spent: false });
+  const faceNode = (t, r) => addNode(t, R(r.x + 22, r.x + r.w - 22), R(r.y + 40, r.y + r.h - 30), true);
+
+  const x0 = i * CHUNK_W;
+  const nIslands = RI(1, 2);
+  let cursor = x0 + R(40, 180);
+  for (let k = 0; k < nIslands; k++) {
+    const w = R(430, 820);
+    if (cursor + w > x0 + CHUNK_W - 60) break;
+    // altitude wanders from a per-chunk band, but never far enough that a glide
+    // from a neighbour cannot reach it
+    const y = clamp(2500 - far * R(200, 900) + Math.sin(i * 1.7 + k) * 260 + R(-160, 160),
+      DRIFT_TOP + 600, WORLD.cloudSea - 460);
+    const slab = addCliff(cursor, y, w, R(220, 330), type, R(120, 190));
+
+    // something to climb
+    const tw = R(100, 180), th = R(220, 460);
+    const tower = addCliff(cursor + R(20, Math.max(30, w - tw - 20)), y - th, tw, th, type, 0);
+    // a standable shelf on the face
+    const lw = R(44, 74);
+    addCliff(R(tower.x - 20, tower.x + tower.w - lw + 20), R(tower.y + 70, tower.y + th - 60), lw, 16, type, 0);
+    if (rnd() < 0.35) addBramble(tower, rnd);
+
+    // a hill or two on the deck
+    for (let h = 0; h < RI(1, 2); h++) {
+      const hw = R(70, 120), hh = R(36, 78);
+      const hill = addCliff(cursor + R(30, Math.max(40, w - hw - 30)), y - hh, hw, hh, type, 0);
+      addNode(rnd() < 0.5 ? 'stone' : 'fiber', hill.x + hw / 2, hill.y);
+    }
+
+    // resources scale with distance the same way the rock does
+    addNode('berry', cursor + w * R(0.15, 0.85), y);
+    if (rnd() < 0.6) addNode(rnd() < 0.5 ? 'fiber' : 'stone', cursor + w * R(0.15, 0.85), y);
+    faceNode(rnd() < 0.5 ? 'ore' : 'crystal', tower);
+    faceNode(rnd() < 0.5 ? 'fiber' : 'stone', slab);
+    if (far > 0.3 && rnd() < 0.5) faceNode('crystal', tower);
+    if (far > 0.5 && rnd() < 0.45) faceNode('skysteel', tower);
+
+    // life
+    lizards.push((() => {
+      const lx = R(tower.x + 20, tower.x + tower.w - 20), ly = R(tower.y + 30, tower.y + th - 20);
+      return { r: tower, x: lx, y: ly, tx: lx, ty: ly, t: R(0, 2), dir: 1, goneUntil: 0 };
+    })());
+    if (rnd() < 0.5) {
+      skyfish.push({ home: { x: cursor + R(-140, w + 140), y: y - R(60, 300) }, x: cursor + w / 2, y: y - 160, t: R(0, 6), dir: 1, shy: 0, goneUntil: 0 });
+    }
+    if (rnd() < 0.5) {
+      runners.push({ rock: slab, x: R(slab.x + 20, slab.x + w - 20), dir: rnd() < 0.5 ? -1 : 1, mode: 'patrol', cd: 0, t: R(0, 5), tame: false });
+    }
+    if (rnd() < 0.45) {
+      const nx = R(tower.x + 25, tower.x + tower.w - 25), ny = R(tower.y + 80, tower.y + th * 0.6);
+      stingwings.push({ nest: { x: nx, y: ny }, x: nx, y: ny, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0, eggs: RI(1, 2), eggBack: 0 });
+    }
+    if (rnd() < 0.4) {
+      const gx0 = cursor - R(300, 420), gx1 = cursor - 40;
+      razorbeaks.push({ anchor: { y: y - R(40, 160), x0: gx0, x1: gx1 }, x: (gx0 + gx1) / 2, y: y - 90, dir: 1, mode: 'patrol', vx: 0, vy: 0, cd: 0, t: R(0, 6) });
+    }
+    // a thermal beside every island: the drift is only survivable if you can
+    // always climb back into the air you just spent crossing to it
+    thermals.push({
+      x: Math.round(cursor - out * R(70, 200)), w: Math.round(R(100, 160)),
+      top: Math.round(Math.max(DRIFT_TOP, y - R(450, 780))),
+      bottom: Math.round(y + R(140, 300)), t: R(0, 6),
+    });
+
+    cursor += w + R(230, 400);
+  }
+  recomputeBounds();
+  return true;
+}
+
+// keep a couple of chunks generated either side of wherever you are
+function ensureDrift(x) {
+  const here = Math.floor(x / CHUNK_W);
+  let built = false;
+  for (let i = here - 2; i <= here + 2; i++) built = buildDriftChunk(i) || built;
+  return built;
 }
 
 // ---------- items & recipes ----------
@@ -616,7 +752,7 @@ const RECIPES = [
   { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },                        desc: '+35 food.' },
   { id: 'jerky',    tier: 'personal', name: 'Lizard ration',     icon: 'gecko',           cost: { lizard: 1 },                       desc: '+35 food. Lizards come back — berry bushes do not.' },
   { id: 'medkit',   tier: 'personal', name: 'Health kit',        icon: 'first-aid-kit',   cost: { fiber: 3, berry: 2 },              desc: '+45 health.' },
-  { id: 'scanner',  tier: 'personal', name: 'Field scanner',     icon: 'radar-sweep',     cost: { crystal: 2, fiber: 3 },            desc: 'Hold the hand on anything new to log it.', flag: 'scanner', once: true },
+  { id: 'scanner',  tier: 'personal', name: 'Field scanner',     icon: 'radar-sweep',     cost: { crystal: 2, fiber: 3 },            desc: 'Logs anything you take or touch, on its own.', flag: 'scanner', once: true },
   { id: 'survey',   tier: 'personal', name: 'Survey lens',       icon: 'metal-detector',  cost: { crystal: 2, ore: 2 },              desc: 'Counts what is left on the rock and points you back to it.', flag: 'survey', once: true },
   { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 },              desc: 'Hold Jump to glide.', flag: 'glider', once: true },
   { id: 'boots',    tier: 'personal', name: 'Spring boots',      icon: 'boots',           cost: { lizard: 3, fiber: 4, stone: 2 },   desc: 'Double jump.', flag: 'boots', once: true },
@@ -714,6 +850,7 @@ const player = {
   hp: 100, food: 100, energy: 100, maxEnergy: 100,
   fuel: 0, maxFuel: 0, jumps: 0,
   harvest: null,
+  feeding: null,
   zip: null,
 };
 
@@ -729,6 +866,7 @@ const flags = {
   survey: false,
 };
 let visorOn = false;
+let panX = 0, panY = 0;   // survey-view camera offset while the visor is up
 let tracked = null;  // material the survey lens is pointing at
 let jetOn = false;
 // world clock, weather and the field log
@@ -754,11 +892,13 @@ let crumbleFx = null;// burst when a hold breaks
 let gripKind = null; // what the hands are on right now, for HUD + audio
 
 let clouds = [];
+const CLOUD_SPAN = 2600;   // clouds live in a band that travels with the camera,
+                           // so an endless world does not need endless clouds
 function initClouds() {
   clouds = [];
   for (let i = 0; i < 30; i++) {
     clouds.push({
-      x: Math.random() * (WORLD.right + 400) - 200,
+      x: cam.x + (Math.random() - 0.5) * CLOUD_SPAN * 2,
       y: WORLD.top + 200 + Math.random() * (WORLD.cloudSea - WORLD.top - 400),
       s: 60 + Math.random() * 160,
       v: 4 + Math.random() * 14,
@@ -901,8 +1041,8 @@ document.addEventListener('touchend', e => {
   lastTouchEnd = now;
 }, { passive: false });
 
-const input = { x: 0, y: 0, jumpHeld: false, jumpPressed: false, interactHeld: false, interactPressed: false, jetHeld: false };
-const btnState = { jump: false, interact: false, jet: false };
+const input = { x: 0, y: 0, jumpHeld: false, jumpPressed: false, interactHeld: false, interactPressed: false, jetHeld: false, feedHeld: false };
+const btnState = { jump: false, interact: false, jet: false, feed: false };
 const keys = {};
 const joy = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
 
@@ -944,6 +1084,7 @@ const btnJet = document.getElementById('btn-jet');
 const btnRelease = document.getElementById('btn-release');
 const btnVisor = document.getElementById('btn-visor');
 const btnZip = document.getElementById('btn-zip');
+const btnFeed = document.getElementById('btn-feed');
 
 function bindHold(el, prop) {
   el.addEventListener('pointerdown', e => {
@@ -960,20 +1101,25 @@ function bindHold(el, prop) {
 }
 bindHold(btnJump, 'jump');
 bindHold(btnInteract, 'interact');
+bindHold(btnFeed, 'feed');
 btnJet.addEventListener('click', toggleJet);
 
-// The jetpack latches on: holding a button while also steering and gliding was a
-// three-thumb problem on a phone. It cuts out on its own when the tank runs dry.
+// The thruster button ARMS the jetpack; jump is what actually fires it. Arming is
+// a state you set once and forget, and flying then uses the button your thumb is
+// already on — one less thing to hold while steering. It stays armed through
+// landings and grabs, and only disarms when the tank runs dry.
 function toggleJet() {
   if (!flags.jetpack) return;
   if (!jetOn && player.fuel <= 0) { toast('Tank empty — land to refuel', 'bad', 'fuel-tank'); return; }
   jetOn = !jetOn;
   btnJet.classList.toggle('on', jetOn);
+  if (jetOn) toast('Jetpack armed — hold jump to fly', 'good', 'jet-pack');
 }
 function jetOff() {
   if (!jetOn) return;
   jetOn = false;
   btnJet.classList.remove('on');
+  btnJet.classList.remove('firing');
 }
 btnPack.addEventListener('click', () => togglePack());
 btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBase(b); });
@@ -984,7 +1130,9 @@ btnZip.addEventListener('click', toggleZip);
 function toggleVisor() {
   if (!flags.visor) return;
   visorOn = !visorOn;
+  panX = 0; panY = 0;
   btnVisor.classList.toggle('on', visorOn);
+  if (visorOn) toast('Survey view — the stick pans, tap again to drop it', 'good', 'binoculars');
 }
 
 window.addEventListener('keydown', e => {
@@ -996,13 +1144,14 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyQ') releaseClimb();
   if (e.code === 'KeyV') toggleVisor();
   if (e.code === 'KeyZ') toggleZip();
+  if (e.code === 'KeyF') { btnState.feed = true; setTimeout(() => { btnState.feed = false; }, T.feedTime * 1000 + 120); }
   if (e.code === 'KeyM') { renderMap(); openOverlay('overlay-map'); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleJet();
   if (e.code === 'Escape') closeOverlays();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-function pollInput() {
+function pollInput(dt) {
   let kx = 0, ky = 0;
   if (keys.ArrowLeft || keys.KeyA) kx -= 1;
   if (keys.ArrowRight || keys.KeyD) kx += 1;
@@ -1014,7 +1163,25 @@ function pollInput() {
   input.y = clamp(ky + jy, -1, 1);
   input.jumpHeld = btnState.jump || !!keys.Space;
   input.interactHeld = btnState.interact || !!keys.KeyE;
-  input.jetHeld = jetOn;
+  input.feedHeld = btnState.feed;
+  // armed + jump held = thrust. The thruster button no longer flies you on its own.
+  input.jetHeld = jetOn && input.jumpHeld;
+
+  // With the visor up you are standing still and looking: the stick pans the
+  // camera instead of walking you off the ledge you are surveying from.
+  if (visorPanning()) {
+    panX = clamp(panX + input.x * T.visorPan * dt, -T.visorPanMax, T.visorPanMax);
+    panY = clamp(panY + input.y * T.visorPan * dt, -T.visorPanMax, T.visorPanMax);
+    input.x = 0; input.y = 0;
+    input.jumpHeld = false; input.jumpPressed = false;
+    input.interactHeld = false; input.interactPressed = false;
+    input.jetHeld = false;
+  }
+}
+
+// panning is for when you have stopped — mid-air the stick still has to fly you
+function visorPanning() {
+  return visorOn && flags.visor && (player.state === 'ground' || player.state === 'climb');
 }
 
 // ---------- physics ----------
@@ -1063,6 +1230,7 @@ function gripFeedback(r) {
   // Learning what a rock is happens on contact, not on the throttled message.
   if (flags.gloves && !touchedRock[r.type]) {
     touchedRock[r.type] = true;
+    autoLog(r.type);
     checkDiscoveries();
   }
   if (gameTime - gripToastAt < 6) return;
@@ -1078,7 +1246,6 @@ function tryGrab() {
   const r = faceAt(player.x + P_W / 2, player.y + P_H / 2);
   if (!r) return false;
   if (!canClimb(r)) { gripFeedback(r); return false; }
-  jetOff(); // grabbing rock ends the burn
   sfx('grab');
   player.state = 'climb';
   player.climbRect = r;
@@ -1252,7 +1419,6 @@ function mountZip() {
   player.zip = { line: hit.line, t: hit.t, dir: hit.t < 0.5 ? 1 : -1 };
   player.vx = 0; player.vy = 0;
   player.jumps = 0;
-  jetOff();
   sfx('zip');
   return true;
 }
@@ -1448,7 +1614,7 @@ function updatePlayer(dt) {
     if (input.x === 0) player.vx *= Math.pow(0.35, dt);
 
     // boots: one extra jump in mid-air
-    if (input.jumpPressed && flags.boots && player.jumps < 2 && !thrusting) {
+    if (input.jumpPressed && flags.boots && player.jumps < 2 && !jetOn) {
       player.vy = -T.jumpVel2;
       player.jumps = 2;
       player.state = 'air';
@@ -1457,7 +1623,7 @@ function updatePlayer(dt) {
     }
 
     if (player.state === 'glide') {
-      if (!input.jumpHeld || !flags.glider) player.state = 'air';
+      if (!input.jumpHeld || !flags.glider || thrusting) player.state = 'air';
       else {
         // rising air turns a glide into a climb — the only way up that costs nothing
         let lift = T.glideFall;
@@ -1472,7 +1638,7 @@ function updatePlayer(dt) {
     if (player.state === 'air') {
       player.vy += T.gravity * dt;
       player.vy = Math.min(player.vy, T.maxFall);
-      if (flags.glider && input.jumpHeld && player.vy > -60 && player.detachTimer <= 0) {
+      if (flags.glider && input.jumpHeld && !thrusting && player.vy > -60 && player.detachTimer <= 0) {
         player.state = 'glide';
         player.vy = Math.min(player.vy, T.glideFall + 120);
       }
@@ -1510,7 +1676,7 @@ function updatePlayer(dt) {
     if (zone) lastSafe = zone;
     player.jumps = 0;
     player.fuel = Math.min(maxFuel(), player.fuel + T.jetRefill * dt);
-    jetOff(); // landing always cuts the thruster
+    // staying armed through a landing is the point of arming — you refuel and go
   }
   player.energy = clamp(player.energy, 0, player.maxEnergy);
 }
@@ -1571,6 +1737,7 @@ function respawn() {
   player.state = 'air';
   player.climbRect = null;
   player.zip = null;
+  player.feeding = null;
   document.getElementById('overlay-death').classList.add('hidden');
   document.body.classList.toggle('menu-open', anyOverlayOpen());
   paused = anyOverlayOpen();
@@ -1641,6 +1808,20 @@ function scanTarget() {
 function unscannedTarget() {
   const t = scanTarget();
   return t && !scanned[t] ? t : null;
+}
+
+// The scanner is passive: anything you take, touch or stand next to writes
+// itself into the log. Holding a button on something you had already identified
+// was busywork — the interesting part was always finding the thing.
+function autoLog(key) {
+  if (!flags.scanner || !key || !CODEX[key] || scanned[key]) return false;
+  recordScan(key);
+  return true;
+}
+
+function updateAutoLog() {
+  if (!flags.scanner) return;
+  autoLog(scanTarget());
 }
 
 function scanCount() { return CODEX_KEYS.filter(k => scanned[k]).length; }
@@ -1762,11 +1943,9 @@ function updateInteraction(dt) {
   const thornNear = (relic || wr) ? null : nearestBramble();
   const thorn = flags.cutter ? thornNear : null;
   const nest = (relic || wr || thorn) ? null : nearestNest();
-  const scan = (relic || nest || wr || thorn) ? null : unscannedTarget();
-  // logging a beast comes before befriending it — the scan is a one-off
-  const feed = (relic || wr || thorn || nest || scan) ? null : nearestFeedable();
-  if (relic || nest || wr || thorn || feed) { node = null; critter = null; }
-  if (scan) { node = null; critter = null; } // logging something new comes first
+  // feeding has its own button now, so it never competes for the hand
+  const feed = nearestFeedable();
+  if (relic || nest || wr || thorn) { node = null; critter = null; }
 
   // a tap of the hand doubles as the pulse when something is on you
   if (input.interactPressed && flags.pulse && threatInRange(T.pulseRadius)) firePulse();
@@ -1780,6 +1959,7 @@ function updateInteraction(dt) {
       const haul = { ore: 6, crystal: 5, fiber: 4, stone: 4 };
       for (const [k, v] of Object.entries(haul)) inv[k] += v;
       inv.relic += 1;
+      autoLog('relic');
       checkDiscoveries();
       toast('Relic recovered — and a cache of supplies', 'good', 'emerald');
       saveGame();
@@ -1801,6 +1981,7 @@ function updateInteraction(dt) {
     player.harvest.t += dt;
     if (player.harvest.t >= T.brambleCut) {
       thorn.cutUntil = gameTime + T.brambleRegrow;
+      autoLog('bramble');
       player.harvest = null;
       inv.fiber += 2;
       toast('Cut through — +2 fiber', 'good', 'machete');
@@ -1818,30 +1999,8 @@ function updateInteraction(dt) {
       player.harvest = null;
       // robbing a nest is never free
       nest.mode = 'chase'; nest.stun = 0; nest.hitCd = 0.4;
+      autoLog('stingwing');
       toast('Egg taken — it saw you', 'bad', 'egg-clutch');
-      saveGame();
-    }
-  } else if (input.interactHeld && scan) {
-    if (!player.harvest || player.harvest.scan !== scan) player.harvest = { scan, t: 0, total: T.scanTime };
-    player.harvest.t += dt;
-    if (player.harvest.t >= T.scanTime) {
-      const key = player.harvest.scan;
-      player.harvest = null;
-      recordScan(key);
-    }
-  } else if (input.interactHeld && feed) {
-    if (!player.harvest || player.harvest.feed !== feed) player.harvest = { feed, t: 0, total: T.feedTime };
-    player.harvest.t += dt;
-    if (player.harvest.t >= T.feedTime) {
-      const food = inv.berry > 0 ? 'berry' : 'ration';
-      inv[food] -= 1;
-      feed.tame = true;
-      feed.mode = 'patrol';
-      feed.cd = 0;
-      player.harvest = null;
-      toast('It took the food — no more charging', 'good', 'heart-plus');
-      sfx('tame');
-      checkDiscoveries();
       saveGame();
     }
   } else if (input.interactHeld && critter) {
@@ -1850,6 +2009,7 @@ function updateInteraction(dt) {
     if (player.harvest.t >= T.captureTime) {
       inv[critter.item] += 1;
       critter.c.goneUntil = gameTime + T.critterRespawn;
+      autoLog(critter.item === 'lizard' ? 'lizard' : 'skyfish');
       checkDiscoveries();
       player.harvest = null;
       toast('Caught a ' + ITEMS[critter.item].name.toLowerCase(), 'good', ITEMS[critter.item].icon);
@@ -1864,6 +2024,7 @@ function updateInteraction(dt) {
         player.energy = Math.max(0, player.energy - T.harvestWallCost);
       }
       inv[def.item] += def.yield;
+      autoLog(node.type);
       node.spent = true; // stripped for good — what grows back grows in a planter
       player.harvest = null;
       toast('+' + def.yield + ' ' + def.name, 'good', def.icon);
@@ -1884,15 +2045,41 @@ function updateInteraction(dt) {
   }
   if (!input.interactHeld) player._baseTapLatch = false;
 
+  // Feeding runs on its own button and its own timer, so holding out food never
+  // competes with harvesting the rock you happen to be standing on.
+  if (input.feedHeld && feed) {
+    if (!player.feeding || player.feeding.at !== feed) player.feeding = { at: feed, t: 0, total: T.feedTime };
+    player.feeding.t += dt;
+    if (player.feeding.t >= T.feedTime) {
+      const food = inv.berry > 0 ? 'berry' : 'ration';
+      inv[food] -= 1;
+      feed.tame = true;
+      feed.mode = 'patrol';
+      feed.cd = 0;
+      player.feeding = null;
+      autoLog('runner');
+      toast('It took the food — no more charging', 'good', 'heart-plus');
+      sfx('tame');
+      checkDiscoveries();
+      saveGame();
+    }
+  } else {
+    player.feeding = null;
+  }
+
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
   const prog = player.harvest ? player.harvest.t / player.harvest.total : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
-  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic || !!nest || !!scan || !!wr || !!thorn || !!feed);
-  btnInteract.classList.toggle('scanning', !!scan && !relic && !nest);
+  const feedRing = document.querySelector('#btn-feed .abtn-ring circle');
+  const fprog = player.feeding ? player.feeding.t / player.feeding.total : 0;
+  feedRing.style.strokeDashoffset = String(207.3 * (1 - fprog));
+
+  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic || !!nest || !!wr || !!thorn);
   btnBase.classList.toggle('hidden', !nearestBase());
   btnJet.classList.toggle('hidden', !flags.jetpack);
   btnRelease.classList.toggle('hidden', player.state !== 'climb');
   btnVisor.classList.toggle('hidden', !flags.visor);
+  btnFeed.classList.toggle('hidden', !feed);
   const onZip = player.state === 'zip';
   btnZip.classList.toggle('hidden', !onZip && !nearestZip());
   btnZip.classList.toggle('on', onZip);
@@ -1901,6 +2088,13 @@ function updateInteraction(dt) {
 // ---------- creatures ----------
 
 function playerCenter() { return { x: player.x + P_W / 2, y: player.y + P_H / 2 }; }
+
+// Simulation radius. With an endless drift there can be hundreds of creatures on
+// islands you flew past an hour ago; none of them need a tick.
+const SIM_RANGE = 2600;
+function inSim(x, y) {
+  return Math.abs(x - (player.x + P_W / 2)) < SIM_RANGE && Math.abs(y - (player.y + P_H / 2)) < SIM_RANGE;
+}
 
 function knockOffWall(dirX) {
   if (player.state === 'climb') detach(true);
@@ -1912,6 +2106,7 @@ function knockOffWall(dirX) {
 function updateStingwings(dt) {
   const pc = playerCenter();
   for (const w of stingwings) {
+    if (!inSim(w.x, w.y)) continue;
     w.t += dt; w.hitCd = Math.max(0, w.hitCd - dt);
     if (w.stun > 0) { w.stun -= dt; w.y += 20 * dt; continue; }
     const dToPlayer = dist(w.x, w.y, pc.x, pc.y);
@@ -1941,6 +2136,7 @@ function updateStingwings(dt) {
 function updateRazorbeaks(dt) {
   const pc = playerCenter();
   for (const b of razorbeaks) {
+    if (!inSim(b.x, b.y)) continue;
     b.t += dt; b.cd = Math.max(0, b.cd - dt);
     const airborne = player.state === 'air' || player.state === 'glide';
     const dToPlayer = dist(b.x, b.y, pc.x, pc.y);
@@ -1979,6 +2175,7 @@ function updateSkyfish(dt) {
   const pc = playerCenter();
   for (const f of skyfish) {
     if (gameTime < f.goneUntil) continue;
+    if (!inSim(f.x, f.y)) continue;
     f.t += dt;
     const d = dist(f.x, f.y, pc.x, pc.y);
     // You cannot hover next to a trout, so you catch one by flying through it.
@@ -2009,6 +2206,7 @@ function updateRunners(dt) {
   const pc = playerCenter();
   for (const rr of runners) {
     const r = rr.rock;
+    if (!inSim(rr.x, r.y)) continue;
     rr.t += dt;
     rr.cd = Math.max(0, rr.cd - dt);
     const onSameTop = player.state === 'ground' && Math.abs(player.y + P_H - r.y) < 4 &&
@@ -2065,6 +2263,7 @@ function updateLizards(dt) {
   const pc = playerCenter();
   for (const l of lizards) {
     if (gameTime < l.goneUntil) continue;
+    if (!inSim(l.x, l.y)) continue;
     // once your hand is on it, it stops struggling — otherwise it could outrun the grab
     if (player.harvest && player.harvest.critter === l) continue;
     l.t -= dt;
@@ -2161,7 +2360,7 @@ function craft(recipe, base) {
   if (recipe.id === 'visor') { flags.visor = true; toast('Range visor — tap to look far', 'good', 'binoculars'); }
   if (recipe.id === 'thermal') { flags.thermal = true; toast('Thermal wing — ride the updrafts', 'good', 'windy-stripes'); }
   if (recipe.id === 'cutter') { flags.cutter = true; toast('Thorn hook — the tops are open now', 'good', 'machete'); }
-  if (recipe.id === 'scanner') { flags.scanner = true; toast('Scanner online — hold the hand on anything new', 'good', 'radar-sweep'); }
+  if (recipe.id === 'scanner') { flags.scanner = true; toast('Scanner online — everything you touch logs itself', 'good', 'radar-sweep'); }
   if (recipe.id === 'survey') { flags.survey = true; toast('Survey lens — the pack now counts what is left', 'good', 'metal-detector'); }
   if (recipe.id === 'mk3') { if (base) base.mk3 = true; flags.mk3 = true; toast('Fabricator Mk3 online', 'good', 'anvil'); }
   if (recipe.id === 'stormsuit') { flags.stormsuit = true; toast('Storm suit — lightning cannot reach you', 'good', 'chest-armor'); }
@@ -2371,6 +2570,7 @@ function saveGame() {
       ziplines: ziplines.map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 })),
       zipAnchor,
       tracked,
+      drift: driftChunks.slice(),
       tame: runners.map(r => (r.tame ? 1 : 0)),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -2384,6 +2584,10 @@ function loadGame() {
   if (!data || !data.player || typeof data.seed !== 'number') return false;
 
   generateWorld(data.seed);
+  // Replay the drift in the order it was first generated: chunk contents are
+  // seeded per chunk, so the arrays line up with the saved spent/tame flags.
+  for (const i of data.drift || []) buildDriftChunk(i);
+  recomputeBounds();
   gameTime = data.gameTime || 0;
   Object.assign(player, data.player);
   player.vx = 0; player.vy = 0; player.state = 'air'; player.climbRect = null; player.harvest = null;
@@ -2804,8 +3008,8 @@ function renderLog() {
   const summary = document.getElementById('log-summary');
   if (summary) {
     summary.textContent = flags.scanner
-      ? 'Logged ' + n + ' of ' + CODEX_KEYS.length + (done ? ' — complete.' : '.')
-      : 'Build a Field scanner to start logging what lives up here.';
+      ? 'Logged ' + n + ' of ' + CODEX_KEYS.length + (done ? ' — complete.' : ' — everything you touch logs itself.')
+      : 'Build a Field scanner and everything you touch will log itself.';
   }
   const prog = document.getElementById('log-progress');
   if (prog) prog.textContent = 'Logged ' + n + ' of ' + CODEX_KEYS.length + (done ? ' — complete.' : '');
@@ -2900,11 +3104,11 @@ function renderMap() {
   g.beginPath(); g.arc(px, py, 2.5, 0, Math.PI * 2); g.fill();
 
   const pct = Math.round(100 * seenRocks / Math.max(1, rocks.filter(r => !r.deck).length));
-  document.getElementById('map-note').textContent =
-    'Charted ' + pct + '% of the islands' +
-    (flags.compass ? ' · compass marks every unopened relic' : '') +
-    (flags.survey ? ' · lens marks every deposit still standing' : '') +
-    ' · the visor charts further while it is up.';
+  const notes = ['Charted ' + pct + '% of what you have flown'];
+  if (flags.compass) notes.push('compass: unopened relics');
+  if (flags.survey) notes.push('lens: deposits still standing');
+  notes.push('the visor charts further');
+  document.getElementById('map-note').textContent = notes.join(' · ');
 }
 
 // changelog
@@ -2960,6 +3164,7 @@ document.querySelector('#btn-jet .abtn-icon').innerHTML = svgIcon('jet-pack');
 document.querySelector('#btn-release .abtn-icon').innerHTML = svgIcon('falling');
 document.querySelector('#btn-visor .abtn-icon').innerHTML = svgIcon('binoculars');
 document.querySelector('#btn-zip .abtn-icon').innerHTML = svgIcon('ropeway');
+document.querySelector('#btn-feed .abtn-icon').innerHTML = svgIcon('meat');
 document.querySelector('#version-badge .badge-icon').innerHTML = svgIcon('mountain-climbing');
 document.getElementById('version-text').textContent = 'v' + GAME_VERSION;
 document.querySelector('#btn-pack .abtn-icon').innerHTML = svgIcon('knapsack');
@@ -2991,6 +3196,8 @@ function updateHUD() {
     fuelBar.classList.toggle('warn', player.fuel < maxFuel() * 0.2);
   }
   btnJet.classList.toggle('glide-ready', flags.jetpack && player.fuel > 0);
+  btnJet.classList.toggle('firing', flags.jetpack && jetOn && input.jetHeld && player.fuel > 0);
+  btnJump.classList.toggle('thrusting', flags.jetpack && jetOn);
 
   // weather + clock strip under the bars
   const w = document.getElementById('weather');
@@ -3185,9 +3392,15 @@ function render() {
 
   for (const c of clouds) if (c.layer === 0) drawIcon(ctx, 'fluffy-cloud', c.x, c.y, c.s, '#ffffff', c.a);
 
+  // The drift makes the world unbounded, so nothing off-camera is worth drawing.
+  const halfW = cw / scale / 2 + 300, halfH = chh / scale / 2 + 300;
+  const vis = (x, y, w, h) => x + (w || 0) > cam.x - halfW && x < cam.x + halfW &&
+    y + (h || 0) > cam.y - halfH && y < cam.y + halfH;
+
   // thermals: columns of rising air, drawn behind the rock
   const activeThermal = inThermal();
   for (const th of thermals) {
+    if (!vis(th.x - th.w / 2, th.top, th.w, th.bottom - th.top)) continue;
     const hot = th === activeThermal;
     const g2 = ctx.createLinearGradient(0, th.bottom, 0, th.top);
     g2.addColorStop(0, hot ? 'rgba(255,214,107,0.20)' : 'rgba(200,230,255,0.10)');
@@ -3204,10 +3417,11 @@ function render() {
     }
   }
 
-  for (const r of rocks) drawCliff(r);
+  for (const r of rocks) if (vis(r.x, r.y, r.w, r.h)) drawCliff(r);
 
   // thorn along the lips, and the wreck you woke beside
   for (const b of brambles) {
+    if (!vis(b.x, b.y - 20, b.w, b.h + 40)) continue;
     if (gameTime < b.cutUntil) {
       // cut stubble, so a cleared lip still reads as having been thorned
       ctx.save();
@@ -3260,6 +3474,7 @@ function render() {
 
   // ridgerunners patrol island tops
   for (const rr of runners) {
+    if (!vis(rr.x - 24, rr.rock.y - 44, 48, 48)) continue;
     ctx.save();
     ctx.translate(rr.x, rr.rock.y - 17 + Math.abs(Math.sin(rr.t * (rr.mode === 'charge' ? 14 : 6))) * 2);
     if (rr.dir < 0) ctx.scale(-1, 1);
@@ -3381,8 +3596,10 @@ function render() {
   // nodes
   const active = nearestNode();
   for (const n of NODES) {
+    if (n.spent) continue; // stripped rock shows nothing — the world empties visibly
+    if (!vis(n.x - 20, n.y - 34, 40, 54)) continue;
     const def = NODE_TYPES[n.type];
-    const depleted = n.spent;
+    const depleted = false;
     const bob = n.wall ? 0 : Math.sin(gameTime * 2 + n.x) * 2;
     const nx = n.x, ny = n.y - (n.wall ? 0 : 14) + bob;
     ctx.globalAlpha = depleted ? 0.22 : 1;
@@ -3714,7 +3931,7 @@ function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
 
-  pollInput();
+  pollInput(dt);
   try {
     step(dt);
   } catch (err) {
@@ -3734,8 +3951,10 @@ function frame(now) {
   scale = lerp(scale, wantScale, clamp(6 * dt, 0, 1));
 
   // Lead the camera along your velocity so you can see what you are flying into.
-  const leadX = clamp(player.vx * T.lookAhead, -T.lookAheadMax, T.lookAheadMax);
-  const leadY = clamp(player.vy * T.lookAhead * 0.7, -T.lookAheadMax, T.lookAheadMax);
+  const panning = visorPanning();
+  if (!panning && (panX || panY)) { panX = 0; panY = 0; }
+  const leadX = panning ? panX : clamp(player.vx * T.lookAhead, -T.lookAheadMax, T.lookAheadMax);
+  const leadY = panning ? panY : clamp(player.vy * T.lookAhead * 0.7, -T.lookAheadMax, T.lookAheadMax);
   const targetX = clamp(player.x + P_W / 2 + leadX, WORLD.left, WORLD.right);
   const targetY = clamp(player.y + leadY, WORLD.top, WORLD.cloudSea + 60 - chh / scale / 2);
   // ease harder when the lead is large, so fast flight feels smooth not snappy
@@ -3744,6 +3963,7 @@ function frame(now) {
 
   render();
   updateHUD();
+  document.body.classList.toggle('surveying', panning);
   requestAnimationFrame(frame);
 }
 
@@ -3754,6 +3974,8 @@ function step(dt) {
     updateWorldClock(dt);
     updateAudio(dt);
     updateVitals(dt);
+    ensureDrift(player.x + P_W / 2);
+    updateAutoLog();
     updateInteraction(dt);
     updateStingwings(dt);
     updateRazorbeaks(dt);
@@ -3765,7 +3987,8 @@ function step(dt) {
     if (crumbleFx) { crumbleFx.t += dt; if (crumbleFx.t > 0.5) crumbleFx = null; }
     for (const c of clouds) {
       c.x += c.v * dt;
-      if (c.x > WORLD.right + 250) c.x = -200;
+      if (c.x - cam.x > CLOUD_SPAN) c.x -= CLOUD_SPAN * 2;
+      else if (cam.x - c.x > CLOUD_SPAN) c.x += CLOUD_SPAN * 2;
     }
     autosaveTimer -= dt;
     if (autosaveTimer <= 0) { autosaveTimer = 20; saveGame(); }
@@ -3782,6 +4005,8 @@ if (!resumed) {
   player.y = CAMP.y - P_H;
   lastSafe = CAMP;
 }
+ensureDrift(player.x + P_W / 2);
+cam.x = player.x; cam.y = player.y - 60;
 initClouds();
 checkDiscoveries();
 revealAround();
@@ -3789,7 +4014,7 @@ document.getElementById('btn-sound').innerHTML = svgIcon(audio.on ? 'sound-on' :
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Stocktake', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — The Drift', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -3815,10 +4040,16 @@ window.SKYREACH = {
   get wreck() { return wreck; },
   get ziplines() { return ziplines; },
   get zipAnchor() { return zipAnchor; },
+  get driftChunks() { return driftChunks; },
+  get core() { return CORE; },
+  ensureDrift, buildDriftChunk, chunkIsDrift,
+  get chunkW() { return CHUNK_W; },
   get crops() { return CROPS; },
   get nodeFloor() { return NODE_FLOOR; },
   placeZip, mountZip, dismountZip, toggleZip, nearestZip,
   sowPlot, pickPlot, plotReady, plotProgress, nearestFeedable, placeBase,
+  autoLog, visorPanning,
+  get panX() { return panX; }, get panY() { return panY; },
   surveyRemaining, nearestTracked, trackMaterial, renderSurvey,
   get tracked() { return tracked; },
   get baseScale() { return baseScale; },

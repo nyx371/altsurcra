@@ -1,8 +1,22 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.12.0';
+const GAME_VERSION = '0.13.0';
 
 const CHANGELOG = [
+  {
+    version: '0.13.0',
+    name: 'The Drift',
+    date: '2026-07-27',
+    notes: [
+      'The sky no longer ends: past either edge of the island chain, new islands generate as you fly, forever',
+      'The drift gets harsher the further out you go — better rock, better materials, meaner company',
+      'Dedicated feed button: hold it beside a ridgerunner instead of fighting the hand button for it',
+      'The Field scanner is passive now — anything you take, touch or fly through logs itself',
+      'Visor is a survey view: stand still, pan the camera with the stick, and every other button clears out of the way',
+      'Jetpack: the thruster button arms it, then you hold jump to fly. It stays armed through landings',
+      'Stripped resource nodes disappear from the world instead of sitting there greyed out',
+    ],
+  },
   {
     version: '0.12.0',
     name: 'Stocktake',

@@ -19,10 +19,11 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Grab a cliff face / climb | hold up while in front of one | W / up |
 | Climb down from a top | hold down | S / down |
 | Jump · hold to glide (needs Glider) | right big button | Space |
-| Harvest / catch a lizard / feed a ridgerunner (hold) · Glove pulse (tap, once crafted) | hand button | E |
-| Jetpack thrust (tap to toggle, once crafted) | thruster button | Shift |
+| Harvest / catch a lizard / loot (hold) · Glove pulse (tap, once crafted) | hand button | E |
+| Feed a ridgerunner (hold) | feed button (appears beside one) | F |
+| Arm the jetpack (then hold Jump to fly) | thruster button | Shift |
 | Let go of the wall | release button (appears while climbing) | Q |
-| Range visor: zoom way out (once crafted) | binocular button | V |
+| Survey view: zoom out, pan with the stick | binocular button | V |
 | Ride a zipline / drop off it | cable button (appears beside one) | Z |
 | Sky chart | map button (top right) | M |
 | Mute / unmute | speaker button (top right) | — |
@@ -44,7 +45,7 @@ The **Survey lens** (2 crystal, 2 ore) is the answer to "where's the ore I haven
 
 A **Zipline kit** (4 ore, 2 crystal, 4 fiber, at a Mk2) strings a **motorised cable** between two points you pick: place one anchor, walk or fly to the far end, place the second. It carries you *both ways* — push the stick along the line to reverse mid-span — and you can catch it anywhere along its length, not just at the ends.
 
-**Ridgerunners can be talked down.** Hold the hand button near one while carrying a skyberry or a ration and it takes the food, stops charging for good, and follows you around its island instead.
+**Ridgerunners can be talked down.** Hold the **feed button** beside one while carrying a skyberry or a ration and it takes the food, stops charging for good, and follows you around its island instead.
 
 Your first four falls are free. From the fifth on, each death costs a quarter of the raw materials you're carrying — gear and upgrades are never lost, and nothing is left behind in the world to go fetch.
 
@@ -52,7 +53,7 @@ The pack has a **Playtest cheats** row (materials, base kits, zipline kits, rest
 
 ## The world
 
-Every new game generates a fresh island chain from a random seed — resuming keeps your world, wiping the save remixes it. There are no guided goals: explore, harvest, craft, and push upward. Stingwings guard cliffs and nightwings patrol the gaps; craft the **Glove pulse** and tap the hand button to drive them off.
+Every new game generates a fresh island chain from a random seed — resuming keeps your world, wiping the save remixes it. **Past either edge of that chain the sky keeps going:** new islands generate as you fly, endlessly east and west, from the same seed. The further out you get, the harder the rock and the richer the faces — and every drift island carries a thermal, so it is never a one-way trip. There are no guided goals: explore, harvest, craft, and push upward. Stingwings guard cliffs and nightwings patrol the gaps; craft the **Glove pulse** and tap the hand button to drive them off.
 
 Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to catch one, and **sky trout** are caught by gliding straight through them. Both respawn — the only wild things that do — and both are crafting inputs: lizards for Spring boots, Scale armor and rations, trout for the Jetpack and Resonant magnets.
 
@@ -64,7 +65,7 @@ Going sideways pays too: **outposts** sit far east and west of the main chain, e
 
 **Day and night** turn every five minutes: after dark the nightwings hunt harder and thermals go weak, so sleep it off at a base or gear up for it. **Storms** bring wind that shoves you mid-glide and lightning that hunts anything high and exposed — climb, shelter, or build the Storm suit.
 
-Build a **Field scanner** and hold the hand on anything new to fill an 11-entry field log. Rob stingwing nests for eggs (the resident wakes up angry). **Skysteel** on the highest faces unlocks **Fabricator Mk3**, and with it the Storm suit, the Ascender rig, and the **Signal beacon** — carry that to the highest rock in the world to finish the run.
+Build a **Field scanner** and everything you take, touch or fly through logs itself into a 13-entry field log. Rob stingwing nests for eggs (the resident wakes up angry). **Skysteel** on the highest faces unlocks **Fabricator Mk3**, and with it the Storm suit, the Ascender rig, and the **Signal beacon** — carry that to the highest rock in the world to finish the run.
 
 Progress autosaves to your device.
 

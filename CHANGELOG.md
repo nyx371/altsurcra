@@ -2,6 +2,18 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.13.0 — The Drift (2026-07-27)
+
+- **The sky no longer ends.** Past either edge of the authored island chain, procedural islands generate as you fly — endlessly, east and west, deterministic from the world seed
+- The drift escalates with distance: granite gives way to basalt and storm rock, resources get richer, and the company gets meaner. Every island carries a thermal so it is never a one-way trip
+- Drift chunks, and everything you strip or tame on them, persist in the save
+- **Dedicated feed button** — holding out food no longer competes with the hand button for a target
+- **The Field scanner is passive.** Anything you take, touch, grip or fly through logs itself; hold-to-scan is gone
+- **The visor is a survey view.** Standing or hanging, the stick pans the camera instead of moving you, and every button but the visor clears out of the way
+- **Jetpack rework:** the thruster button arms it and jump fires it, so flying uses the button your thumb is already on. It stays armed through landings and grabs, and still cuts out on an empty tank
+- Stripped nodes disappear from the world instead of sitting there greyed out
+- Off-screen rock, creatures and effects are culled and frozen, so an endless world still holds 60fps
+
 ## v0.12.0 — Stocktake (2026-07-27)
 
 - **Survey lens** (2 crystal, 2 ore): a Survey section in the pack counting how much of each material is still standing out in the world
