@@ -57,13 +57,19 @@ svg { display: block; width: 100%; height: 100%; fill: currentColor; }
   border-radius: 12px;
   transition: background .15s, padding .15s;
 }
-/* over an open menu the bars get their own backing so they stay legible */
+/* Over an open menu the bars get their own backing so they stay legible, and
+   shrink so they intrude as little as possible on the panel behind them. */
 body.menu-open .bars {
   background: rgba(6, 10, 24, .82);
-  padding: 7px 10px;
-  margin: -7px -10px;
+  padding: 6px 8px;
+  margin: -6px -8px;
   box-shadow: 0 4px 18px rgba(0,0,0,.4);
+  gap: 4px;
 }
+body.menu-open .bar-track { width: 76px; height: 8px; }
+body.menu-open #bar-fuel .bar-track { width: 56px; }
+body.menu-open .bar-icon { width: 15px; height: 15px; }
+body.menu-open #weather { display: none; }
 
 .bar { display: flex; align-items: center; gap: 6px; }
 .bar.hidden { display: none; }
@@ -322,3 +328,24 @@ button { touch-action: manipulation; } /* taps fire instantly, double-tap never 
 #weather.hidden { display: none; }
 #weather .w-storm { color: #ffd76b; }
 #weather .w-night { color: #9fb6ff; }
+
+/* ---------- HUD buttons + map ---------- */
+
+.hud-right { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
+.hud-btn {
+  width: 30px; height: 30px; padding: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(8, 12, 28, .65);
+  color: #aecbff;
+  cursor: pointer;
+}
+.hud-btn:active { background: rgba(89,160,255,.45); color: #fff; }
+
+.panel.wide { width: min(660px, 96vw); }
+#map-canvas {
+  display: block; width: 100%; height: auto;
+  border-radius: 12px;
+  background: #0a1024;
+  border: 1px solid rgba(255,255,255,.12);
+}

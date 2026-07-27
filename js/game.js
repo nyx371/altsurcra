@@ -86,7 +86,9 @@ const T = {
   medkitHeal: 45,
   thermalLift: -115,      // glide descent inside a thermal (negative = rising)
   thermalLiftWing: -235,  // with the thermal wing fitted
-  visorZoom: 0.5,         // camera scale multiplier while the visor is up
+  visorZoom: 0.17,        // camera scale multiplier while the visor is up
+  lookAhead: 0.55,        // how far the camera leads your velocity
+  lookAheadMax: 320,
   runnerSpeed: 96,
   runnerCharge: 275,
   runnerDamage: 6,
@@ -102,8 +104,20 @@ const T = {
   boltDamage: 22,
   boltEvery: 4.5,
   scanTime: 1.3,
+  crumbleHold: 1.6,       // seconds a crumbling patch takes your weight
+  crumbleHeal: 26,
+  featureFeedback: 0.9,
   eggFood: 25,
   climbBonusAscender: 1.6,
+};
+
+// What a stretch of rock is like under your hands. Routes are made of these:
+// a good line strings holds and ledges together, a bad one crosses slick rock.
+const FEATURES = {
+  hold:    { name: 'Handholds',    drain: 0.45, color: '#7ddc7d', mark: 'grab' },
+  rest:    { name: 'Rest ledge',   drain: 0,    color: '#8fc7ff', mark: 'ladder' },
+  slick:   { name: 'Slick rock',   drain: 2.1,  color: '#ff8a94', mark: 'windy-stripes' },
+  crumble: { name: 'Crumbling',    drain: 1.0,  color: '#ffb454', mark: 'broken-wall' },
 };
 
 // Everything you can point the scanner at. Completing the log is the run's
@@ -165,6 +179,51 @@ let summit = null;
 let CAMP = { x: 300, y: 2500 };
 let worldSeed = 0;
 
+// Lay a route across a face: bands of holds, ledges, slick and crumbling rock.
+// Harder rock gets meaner mixes, so the tier you can grip also reads differently.
+function faceFeatures(r, rnd) {
+  if (r.h < 110 || r.w < 40) return [];
+  const out = [];
+  const R = (a, b) => a + rnd() * (b - a);
+  const mix = r.type === 'stormrock' ? ['slick', 'crumble', 'hold', 'slick', 'rest', 'crumble']
+    : r.type === 'basalt' ? ['slick', 'hold', 'crumble', 'hold', 'rest', 'slick']
+    : ['hold', 'hold', 'rest', 'slick', 'crumble', 'hold'];
+  const rows = Math.max(2, Math.floor(r.h / 95));
+  for (let i = 0; i < rows; i++) {
+    const per = rnd() < 0.55 ? 2 : 1;
+    for (let k = 0; k < per; k++) {
+      const kind = mix[Math.floor(rnd() * mix.length)];
+      const w = kind === 'rest' ? R(38, 74) : R(46, Math.max(52, r.w * 0.55));
+      const h = kind === 'rest' ? R(30, 44) : R(40, 74);
+      const patch = {
+        kind,
+        x: Math.round(clamp(R(r.x + 4, r.x + r.w - w - 4), r.x, r.x + r.w - w)),
+        y: Math.round(r.y + 30 + (i / rows) * (r.h - 60) + R(-12, 12)),
+        w: Math.round(w), h: Math.round(h),
+        brokenUntil: 0,
+      };
+      // patches never overlap: a stretch of rock must read as exactly one thing
+      const clashes = out.some(o => patch.x < o.x + o.w && patch.x + patch.w > o.x &&
+        patch.y < o.y + o.h && patch.y + patch.h > o.y);
+      if (clashes) continue;
+      out.push(patch);
+    }
+  }
+  return out;
+}
+
+// The patch under your hands right now.
+function featureAt(rect, px, py) {
+  if (!rect || !rect.features) return null;
+  for (const f of rect.features) {
+    if (px >= f.x && px <= f.x + f.w && py >= f.y && py <= f.y + f.h) {
+      if (f.kind === 'crumble' && gameTime < f.brokenUntil) return { kind: 'slick', broken: f };
+      return f;
+    }
+  }
+  return null;
+}
+
 function generateWorld(seed) {
   worldSeed = seed;
   const rnd = mulberry32(seed);
@@ -176,6 +235,7 @@ function generateWorld(seed) {
 
   const addCliff = (x, y, w, h, type, taper) => {
     const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type, taper: taper || 0 };
+    r.features = faceFeatures(r, rnd);
     rocks.push(r);
     return r;
   };
@@ -249,7 +309,8 @@ function generateWorld(seed) {
   }
   while (groundFiber < 4) groundNode('fiber', sx + startW * R(0.2, 0.85), groundY);
   while (groundStone < 4) groundNode('stone', sx + startW * R(0.2, 0.85), groundY);
-  if (rnd() < 0.7) addRunner(slab0, CAMP.x);
+  // deliberately no ridgerunner on the start island: the first ten minutes are
+  // for learning to move, not for being shoved off a cliff by a boar
 
   const nTowers = RI(2, 3);
   let launch = { x: CAMP.x, top: groundY };
@@ -466,6 +527,58 @@ const RECIPES = [
   { id: 'beaconkit', tier: 'mk3',     name: 'Signal beacon',     icon: 'lighthouse',      cost: { skysteel: 6, relic: 2, crystal: 10 }, desc: 'Carry it to the highest rock and answer the sky.', flag: 'beacon', once: true },
 ];
 
+// A plan becomes available when you have seen the reason for it. This replaces
+// a wall of grey recipes with a stream of small discoveries.
+const DISCOVERY = {
+  gloves:   () => inv.fiber >= 1 && inv.stone >= 1,
+  ration:   () => inv.berry >= 2,
+  medkit:   () => inv.fiber >= 2 && player.hp < 95,
+  scanner:  () => inv.crystal >= 1,
+  glider:   () => flags.gloves && inv.fiber >= 3,
+  boots:    () => inv.lizard >= 1 || scanned.lizard,
+  armor:    () => inv.lizard >= 2,
+  pulse:    () => inv.crystal >= 1 && inv.ore >= 1,
+  battery1: () => inv.ore >= 2 && inv.crystal >= 1,
+  spikes:   () => touchedRock.basalt,
+  magnets:  () => touchedRock.stormrock,
+  basekit:  () => inv.stone >= 4 && inv.fiber >= 2,
+  visor:    () => inv.crystal >= 2,
+  mk2:      () => bases.length > 0,
+  jetpack:  () => flags.glider && (inv.skyfish >= 1 || scanned.skyfish),
+  jetpack2: () => flags.jetpack,
+  thermal:  () => scanned.thermal,
+  battery2: () => flags.battery1 && bases.some(b => b.mk2),
+  compass:  () => inv.relic >= 1,
+  relicbat: () => inv.relic >= 2,
+  mk3:      () => inv.skysteel >= 1,
+  stormsuit: () => bases.some(b => b.mk3),
+  ascender: () => bases.some(b => b.mk3),
+  beaconkit: () => bases.some(b => b.mk3),
+};
+const touchedRock = {};
+
+// Playtest helper: skip the discovery chain entirely.
+function revealAllPlans() {
+  for (const r of RECIPES) known[r.id] = true;
+  renderPack();
+}
+
+function checkDiscoveries() {
+  let found = 0;
+  for (const r of RECIPES) {
+    if (known[r.id]) continue;
+    const test = DISCOVERY[r.id];
+    if (test && test()) {
+      known[r.id] = true;
+      found++;
+      toast('New plan: ' + r.name, 'good', r.icon);
+      sfx('discover');
+    }
+  }
+  if (found) { renderPack(); saveGame(); }
+  return found;
+}
+
 // ---------- state ----------
 
 const P_W = 26, P_H = 46;
@@ -501,22 +614,19 @@ let windX = 0;
 let boltTimer = 0;
 let boltFlash = 0;
 const scanned = {};          // codex key -> true
+const known = {};            // recipe id -> discovered
+const seenCells = new Set(); // fog of war: 300px grid cells you have laid eyes on
+const MAP_CELL = 300;
 let beaconLit = false;
 let runStats = { lit: 0 };
 const bases = [];   // {x, y, mk2, wall, store:{}, deck:rect}
 let deaths = 0;
 let paused = false;
 let gameTime = 0;
-let pulseFx = null; // {x, y, t}
-let jumpFx = null;  // scanner sweep on the current target
-  if (player.harvest && player.harvest.scan) {
-    const pc2 = playerCenter();
-    const p2 = player.harvest.t / player.harvest.total;
-    ctx.strokeStyle = 'rgba(159,245,196,0.9)'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(pc2.x, pc2.y, 26 + p2 * 30, 0, Math.PI * 2); ctx.stroke();
-  }
-
-  // double-jump puff
+let pulseFx = null;  // {x, y, t}
+let jumpFx = null;   // double-jump puff
+let crumbleFx = null;// burst when a hold breaks
+let gripKind = null; // what the hands are on right now, for HUD + audio
 
 let clouds = [];
 function initClouds() {
@@ -532,6 +642,110 @@ function initClouds() {
     });
   }
 }
+
+// ---------- audio ----------
+// Everything is synthesised — no asset loads, and the wind can follow altitude
+// and weather continuously instead of looping a sample.
+const audio = { ctx: null, on: true, master: null, windGain: null, windFilter: null, humOsc: null, humGain: null };
+
+function initAudio() {
+  if (audio.ctx || !audio.on) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    const ctx = audio.ctx = new AC();
+    audio.master = ctx.createGain();
+    audio.master.gain.value = 0.5;
+    audio.master.connect(ctx.destination);
+
+    // wind bed: filtered noise whose cutoff and level track altitude and storms
+    const len = ctx.sampleRate * 2;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf; noise.loop = true;
+    audio.windFilter = ctx.createBiquadFilter();
+    audio.windFilter.type = 'bandpass';
+    audio.windFilter.frequency.value = 420;
+    audio.windFilter.Q.value = 0.7;
+    audio.windGain = ctx.createGain();
+    audio.windGain.gain.value = 0.02;
+    noise.connect(audio.windFilter).connect(audio.windGain).connect(audio.master);
+    noise.start();
+
+    // magnetic glove hum, gated on actually gripping rock
+    audio.humOsc = ctx.createOscillator();
+    audio.humOsc.type = 'sawtooth';
+    audio.humOsc.frequency.value = 74;
+    const humFilter = ctx.createBiquadFilter();
+    humFilter.type = 'lowpass';
+    humFilter.frequency.value = 320;
+    audio.humGain = ctx.createGain();
+    audio.humGain.gain.value = 0;
+    audio.humOsc.connect(humFilter).connect(audio.humGain).connect(audio.master);
+    audio.humOsc.start();
+  } catch (e) { audio.ctx = null; }
+}
+
+const SFX = {
+  grab:     { f: 180, to: 90,   d: 0.12, type: 'square',   g: 0.20 },
+  jump:     { f: 300, to: 520,  d: 0.10, type: 'sine',     g: 0.15 },
+  land:     { f: 140, to: 60,   d: 0.12, type: 'sine',     g: 0.18 },
+  harvest:  { f: 620, to: 900,  d: 0.11, type: 'triangle', g: 0.14 },
+  scan:     { f: 880, to: 1320, d: 0.16, type: 'sine',     g: 0.12 },
+  craft:    { f: 420, to: 700,  d: 0.20, type: 'triangle', g: 0.16 },
+  discover: { f: 520, to: 990,  d: 0.28, type: 'sine',     g: 0.18 },
+  hurt:     { f: 220, to: 70,   d: 0.22, type: 'sawtooth', g: 0.22 },
+  crumble:  { f: 160, to: 40,   d: 0.34, type: 'sawtooth', g: 0.20 },
+  thunder:  { f: 90,  to: 32,   d: 0.85, type: 'sawtooth', g: 0.30 },
+  beacon:   { f: 330, to: 660,  d: 0.9,  type: 'sine',     g: 0.22 },
+  pulse:    { f: 700, to: 140,  d: 0.26, type: 'square',   g: 0.18 },
+};
+
+function sfx(name) {
+  const s = SFX[name];
+  if (!s || !audio.on || !audio.ctx) return;
+  const ctx = audio.ctx, now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = s.type;
+  osc.frequency.setValueAtTime(s.f, now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(s.to, 20), now + s.d);
+  g.gain.setValueAtTime(s.g, now);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + s.d);
+  osc.connect(g).connect(audio.master);
+  osc.start(now);
+  osc.stop(now + s.d + 0.02);
+}
+
+function updateAudio(dt) {
+  if (!audio.ctx) return;
+  const alt = clamp((2500 - player.y) / 2200, 0, 1);
+  const airborne = player.state === 'air' || player.state === 'glide';
+  const target = 0.012 + alt * 0.05 + (storming() ? 0.10 : 0) + (airborne ? 0.03 : 0);
+  const cut = 300 + alt * 500 + (storming() ? 700 : 0) + Math.abs(player.vx) * 0.6;
+  audio.windGain.gain.value += (target - audio.windGain.gain.value) * clamp(dt * 2, 0, 1);
+  audio.windFilter.frequency.value += (cut - audio.windFilter.frequency.value) * clamp(dt * 2, 0, 1);
+  const humTarget = player.state === 'climb' ? (gripKind === 'slick' ? 0.05 : 0.03) : 0;
+  audio.humGain.gain.value += (humTarget - audio.humGain.gain.value) * clamp(dt * 6, 0, 1);
+  if (player.state === 'climb') {
+    audio.humOsc.frequency.value = gripKind === 'rest' ? 58 : gripKind === 'slick' ? 96 : 74;
+  }
+}
+
+function toggleAudio() {
+  audio.on = !audio.on;
+  if (audio.on) { initAudio(); if (audio.ctx) audio.master.gain.value = 0.5; }
+  else if (audio.ctx) audio.master.gain.value = 0;
+  const b = document.getElementById('btn-sound');
+  if (b) b.innerHTML = svgIcon(audio.on ? 'sound-on' : 'sound-off');
+  saveGame();
+}
+
+// browsers only allow audio to start from a gesture
+['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+  window.addEventListener(ev, () => { if (audio.on) initAudio(); }, { once: true }));
 
 // ---------- input ----------
 
@@ -650,6 +864,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyC') togglePack();
   if (e.code === 'KeyQ') releaseClimb();
   if (e.code === 'KeyV') toggleVisor();
+  if (e.code === 'KeyM') { renderMap(); openOverlay('overlay-map'); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleJet();
   if (e.code === 'Escape') closeOverlays();
 });
@@ -712,6 +927,11 @@ function canClimb(r) { return CLIFF_TYPES[r.type].tier <= gloveTier(); }
 
 let gripToastAt = -99;
 function gripFeedback(r) {
+  // Learning what a rock is happens on contact, not on the throttled message.
+  if (flags.gloves && !touchedRock[r.type]) {
+    touchedRock[r.type] = true;
+    checkDiscoveries();
+  }
   if (gameTime - gripToastAt < 6) return;
   gripToastAt = gameTime;
   if (!flags.gloves) { toast('No grip — fabricate gloves', 'bad', 'gloves'); return; }
@@ -726,6 +946,7 @@ function tryGrab() {
   if (!r) return false;
   if (!canClimb(r)) { gripFeedback(r); return false; }
   jetOff(); // grabbing rock ends the burn
+  sfx('grab');
   player.state = 'climb';
   player.climbRect = r;
   player.vx = 0; player.vy = 0;
@@ -735,6 +956,7 @@ function tryGrab() {
 function detach(push) {
   player.state = 'air';
   player.climbRect = null;
+  gripKind = null;
   player.detachTimer = push ? 0.35 : 0.15;
 }
 
@@ -760,7 +982,22 @@ function nightAmount() {
 const isNight = () => nightAmount() > 0.5;
 const storming = () => stormLeft > 0;
 
+// Reveal the map around the player — further when the visor is up.
+function revealAround() {
+  const reach = visorOn && flags.visor ? 4 : 2;
+  const cx = Math.floor((player.x + P_W / 2) / MAP_CELL);
+  const cy = Math.floor((player.y + P_H / 2) / MAP_CELL);
+  for (let i = -reach; i <= reach; i++) {
+    for (let j = -reach; j <= reach; j++) seenCells.add((cx + i) + ',' + (cy + j));
+  }
+}
+
+function cellSeen(x, y) {
+  return seenCells.has(Math.floor(x / MAP_CELL) + ',' + Math.floor(y / MAP_CELL));
+}
+
 function updateWorldClock(dt) {
+  revealAround();
   const wasNight = isNight();
   dayTime = (dayTime + dt / T.dayLength) % 1;
   if (!wasNight && isNight()) toast('Night falls — the gaps get dangerous', 'bad', 'moon');
@@ -792,10 +1029,12 @@ function updateWorldClock(dt) {
       const exposed = player.y < T.boltAltitude && player.state !== 'climb';
       if (exposed && !flags.stormsuit && !deathCause) {
         boltFlash = 0.35;
+        sfx('thunder');
         hurt(T.boltDamage, 'Struck out of the storm');
         toast('Lightning!', 'bad', 'lightning-storm');
       } else if (player.y < T.boltAltitude) {
         boltFlash = 0.2;
+        sfx('thunder');
       }
     }
   }
@@ -851,7 +1090,32 @@ function updatePlayer(dt) {
     // the ascender rig makes every part of a climb faster and cheaper
     const climbBoost = flags.ascender ? T.climbBonusAscender : 1;
     const drainScale = flags.ascender ? 0.75 : 1;
-    player.energy -= (movingMag > 0.1 ? T.climbDrainMove * Math.min(movingMag, 1) * drainScale : T.climbDrainIdle) * dt;
+
+    // what is under your hands decides what this stretch costs
+    const feat = featureAt(r, player.x + P_W / 2, player.y + P_H / 2);
+    gripKind = feat ? feat.kind : null;
+    const featDrain = feat ? FEATURES[feat.kind].drain : 1;
+
+    // crumbling rock only takes your weight for so long
+    if (feat && feat.kind === 'crumble' && !feat.broken) {
+      feat.load = (feat.load || 0) + dt;
+      if (feat.load >= T.crumbleHold) {
+        feat.load = 0;
+        feat.brokenUntil = gameTime + T.crumbleHeal;
+        crumbleFx = { x: player.x + P_W / 2, y: player.y + P_H / 2, t: 0 };
+        sfx('crumble');
+        toast('The rock gave way', 'bad', 'broken-wall');
+        detach(false);
+        return;
+      }
+    } else if (feat && feat.load) {
+      feat.load = Math.max(0, feat.load - dt * 0.5);
+    }
+
+    const drain = movingMag > 0.1
+      ? T.climbDrainMove * Math.min(movingMag, 1) * drainScale * featDrain
+      : T.climbDrainIdle * (feat && feat.kind === 'rest' ? 0 : featDrain);
+    player.energy -= drain * dt;
     if (player.energy <= 0) { player.energy = 0; detach(false); return; }
 
     // mantle over the top
@@ -886,7 +1150,7 @@ function updatePlayer(dt) {
   if (grounded) {
     player.vx = input.x * T.walkSpeed;
     player.jumps = 0;
-    if (input.jumpPressed) { player.vy = -T.jumpVel; player.state = 'air'; player.jumps = 1; }
+    if (input.jumpPressed) { player.vy = -T.jumpVel; player.state = 'air'; player.jumps = 1; sfx('jump'); }
     else if (input.y < -0.5 && tryGrab()) return; // grab a face you're standing in front of
     else if (input.y > 0.6) {
       // climb down the face of whatever you're standing on
@@ -912,6 +1176,7 @@ function updatePlayer(dt) {
       player.vy = -T.jumpVel2;
       player.jumps = 2;
       player.state = 'air';
+      sfx('jump');
       jumpFx = { x: player.x + P_W / 2, y: player.y + P_H, t: 0 };
     }
 
@@ -957,6 +1222,7 @@ function updatePlayer(dt) {
   const landed = moveY(player.vy * dt);
   if (landed && player.state !== 'ground') {
     player.state = 'ground';
+    sfx('land');
     if (impactVy > T.fallSafeVel) {
       hurt((impactVy - T.fallSafeVel) * T.fallDmgScale, 'The rock is unforgiving');
     }
@@ -979,6 +1245,7 @@ let deathCause = null;
 
 function hurt(dmg, cause) {
   if (player.invuln > 0 || deathCause) return;
+  sfx('hurt');
   if (flags.stormsuit) dmg *= 0.4;
   else if (flags.armor) dmg *= (1 - T.armorSoak);
   player.hp -= dmg;
@@ -1089,6 +1356,8 @@ function recordScan(key) {
   scanned[key] = true;
   const n = scanCount();
   toast('Logged: ' + CODEX[key].name + ' (' + n + '/' + CODEX_KEYS.length + ')', 'good', 'radar-sweep');
+  sfx('scan');
+  checkDiscoveries();
   if (n === CODEX_KEYS.length) toast('Field log complete', 'good', 'open-book');
   renderLog();
   saveGame();
@@ -1140,6 +1409,7 @@ function firePulse() {
   player.energy -= T.pulseCost;
   const px = player.x + P_W / 2, py = player.y + P_H / 2;
   pulseFx = { x: px, y: py, t: 0 };
+  sfx('pulse');
   for (const w of stingwings) {
     if (dist(px, py, w.x, w.y) < T.pulseRadius) { w.stun = 4; w.mode = 'return'; w.hitCd = 1.5; }
   }
@@ -1180,6 +1450,7 @@ function updateInteraction(dt) {
       const haul = { ore: 6, crystal: 5, fiber: 4, stone: 4 };
       for (const [k, v] of Object.entries(haul)) inv[k] += v;
       inv.relic += 1;
+      checkDiscoveries();
       toast('Relic recovered — and a cache of supplies', 'good', 'emerald');
       saveGame();
     }
@@ -1210,6 +1481,7 @@ function updateInteraction(dt) {
     if (player.harvest.t >= T.captureTime) {
       inv[critter.item] += 1;
       critter.c.goneUntil = gameTime + T.critterRespawn;
+      checkDiscoveries();
       player.harvest = null;
       toast('Caught a ' + ITEMS[critter.item].name.toLowerCase(), 'good', ITEMS[critter.item].icon);
       saveGame();
@@ -1226,6 +1498,8 @@ function updateInteraction(dt) {
       node.depletedUntil = gameTime + def.respawn;
       player.harvest = null;
       toast('+' + def.yield + ' ' + def.name, 'good', def.icon);
+      sfx('harvest');
+      checkDiscoveries();
       saveGame();
     }
   } else {
@@ -1335,6 +1609,7 @@ function updateSkyfish(dt) {
     if (d < 32) {
       f.goneUntil = gameTime + T.critterRespawn;
       inv.skyfish += 1;
+      checkDiscoveries();
       toast('Caught a sky trout', 'good', 'flying-trout');
       saveGame();
       continue;
@@ -1498,6 +1773,8 @@ function craft(recipe, base) {
   if (recipe.id === 'battery2') { flags.battery2 = true; player.maxEnergy = 220; player.energy = 220; toast('Battery Mk2 — 220', 'good', 'battery-pack'); }
   if (recipe.id === 'basekit') { inv.basekit += 1; toast('Base kit ready', 'good', 'house'); }
   if (recipe.id === 'mk2' && base) { base.mk2 = true; toast('Fabricator Mk2 online', 'good', 'anvil'); }
+  sfx('craft');
+  checkDiscoveries();
   renderPack();
   if (openBaseRef && !document.getElementById('overlay-base').classList.contains('hidden')) renderBase(openBaseRef);
   saveGame();
@@ -1536,6 +1813,7 @@ function lightBeacon() {
     return;
   }
   closeOverlays();
+  sfx('beacon');
   beaconLit = true;
   runStats.lit += 1;
   document.getElementById('win-stats').textContent =
@@ -1573,6 +1851,7 @@ function placeBase() {
     toast('Base placed', 'good', 'house');
   }
   inv.basekit -= 1;
+  checkDiscoveries();
   closeOverlays();
   saveGame();
 }
@@ -1619,6 +1898,7 @@ function saveGame() {
       },
       relics: relics.map(r => !!r.taken),
       dayTime, stormTimer, stormLeft, scanned, beaconLit, runStats,
+      known, touchedRock, seen: [...seenCells], audioOn: audio.on,
       nests: stingwings.map(w => ({ e: w.eggs, b: Math.max(0, (w.eggBack || 0) - gameTime) })),
       lizards: lizards.map(l => Math.max(0, l.goneUntil - gameTime)),
       skyfish: skyfish.map(f => Math.max(0, f.goneUntil - gameTime)),
@@ -1663,6 +1943,13 @@ function loadGame() {
   runStats = data.runStats || { lit: 0 };
   for (const k of CODEX_KEYS) delete scanned[k];
   if (data.scanned) for (const k of CODEX_KEYS) if (data.scanned[k]) scanned[k] = true;
+  for (const k of Object.keys(known)) delete known[k];
+  if (data.known) for (const k of Object.keys(data.known)) known[k] = !!data.known[k];
+  for (const k of Object.keys(touchedRock)) delete touchedRock[k];
+  if (data.touchedRock) for (const k of Object.keys(data.touchedRock)) touchedRock[k] = true;
+  seenCells.clear();
+  if (data.seen) for (const c of data.seen) seenCells.add(c);
+  if (data.audioOn === false) { audio.on = false; if (audio.ctx) audio.master.gain.value = 0; }
   if (data.nests) stingwings.forEach((w, i) => {
     if (!data.nests[i]) return;
     w.eggs = data.nests[i].e; w.eggBack = gameTime + (data.nests[i].b || 0);
@@ -1773,7 +2060,17 @@ function renderPack() {
 
   const list = document.getElementById('recipe-list');
   list.innerHTML = '';
-  for (const r of RECIPES) if (r.tier === 'personal') list.appendChild(recipeRow(r));
+  const personal = RECIPES.filter(r => r.tier === 'personal' && known[r.id]);
+  for (const r of personal) list.appendChild(recipeRow(r));
+  const hidden = RECIPES.filter(r => r.tier === 'personal' && !known[r.id]).length;
+  if (!personal.length) {
+    list.innerHTML = '<div class="inv-empty">No plans yet. Gather things and look at them.</div>';
+  } else if (hidden) {
+    const note = document.createElement('div');
+    note.className = 'inv-empty';
+    note.textContent = hidden + ' more ' + (hidden === 1 ? 'plan' : 'plans') + ' still to work out.';
+    list.appendChild(note);
+  }
 }
 
 // ---------- playtest cheats ----------
@@ -1784,6 +2081,7 @@ const CHEATS = {
     toast('+20 of each material', 'good', 'knapsack');
   },
   gear() {
+    revealAllPlans();
     for (const k of Object.keys(flags)) flags[k] = true;
     player.maxEnergy = 220; player.energy = 220;
     player.fuel = maxFuel();
@@ -1865,11 +2163,12 @@ function renderBase(base) {
   const list = document.getElementById('base-recipe-list');
   list.innerHTML = '';
   if (!base.mk2) {
-    list.appendChild(recipeRow(RECIPES.find(r => r.id === 'mk2'), base));
+    if (known.mk2) list.appendChild(recipeRow(RECIPES.find(r => r.id === 'mk2'), base));
   } else {
-    for (const r of RECIPES) if (r.tier === 'mk2') list.appendChild(recipeRow(r, base));
-    if (base.mk3) for (const r of RECIPES) if (r.tier === 'mk3') list.appendChild(recipeRow(r, base));
+    for (const r of RECIPES) if (r.tier === 'mk2' && known[r.id]) list.appendChild(recipeRow(r, base));
+    if (base.mk3) for (const r of RECIPES) if (r.tier === 'mk3' && known[r.id]) list.appendChild(recipeRow(r, base));
   }
+  if (!list.children.length) list.innerHTML = '<div class="inv-empty">Nothing worked out for this bench yet.</div>';
   const rest = document.getElementById('btn-rest');
   rest.disabled = player.food < 25;
   rest.textContent = isNight() ? 'Sleep until dawn' : 'Rest here';
@@ -1905,6 +2204,71 @@ function renderLog() {
   }
 }
 
+// ---------- sky chart ----------
+
+function renderMap() {
+  const cv = document.getElementById('map-canvas');
+  const g = cv.getContext('2d');
+  const W = Math.min(640, Math.round(window.innerWidth * 0.9));
+  const worldW = WORLD.right - WORLD.left;
+  const worldH = (WORLD.cloudSea + 120) - WORLD.top;
+  const H = Math.max(200, Math.round(W * (worldH / worldW)));
+  const dp = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dp; cv.height = H * dp;
+  cv.style.height = H + 'px';
+  g.setTransform(dp, 0, 0, dp, 0, 0);
+
+  const sx = W / worldW, sy = H / worldH;
+  const mx = x => (x - WORLD.left) * sx;
+  const my = y => (y - WORLD.top) * sy;
+
+  g.fillStyle = '#0a1024';
+  g.fillRect(0, 0, W, H);
+
+  // the cloud sea at the bottom
+  g.fillStyle = 'rgba(230,228,240,0.14)';
+  g.fillRect(0, my(WORLD.cloudSea), W, H - my(WORLD.cloudSea));
+
+  // only islands in cells you have laid eyes on
+  let seenRocks = 0;
+  for (const r of rocks) {
+    if (r.deck) continue;
+    if (!cellSeen(r.x + r.w / 2, r.y + r.h / 2)) continue;
+    seenRocks++;
+    const def = CLIFF_TYPES[r.type] || CLIFF_TYPES.granite;
+    g.fillStyle = def.color;
+    g.fillRect(mx(r.x), my(r.y), Math.max(2, r.w * sx), Math.max(2, r.h * sy));
+    g.fillStyle = def.lip2;
+    g.fillRect(mx(r.x), my(r.y), Math.max(2, r.w * sx), 2);
+  }
+
+  const dot = (x, y, col, rad) => {
+    g.fillStyle = col;
+    g.beginPath(); g.arc(mx(x), my(y), rad || 4, 0, Math.PI * 2); g.fill();
+  };
+
+  dot(CAMP.x, CAMP.y, '#ffb454', 5);
+  for (const b of bases) dot(b.x, b.y, '#8fc7ff', 5);
+  for (const rl of relics) {
+    if (rl.taken) dot(rl.x, rl.y, 'rgba(120,140,170,0.7)', 3);
+    else if (flags.compass || cellSeen(rl.x, rl.y)) dot(rl.x, rl.y, '#7dffb0', 5);
+  }
+  if (summit && cellSeen(summit.x, summit.y)) dot(summit.x, summit.y, beaconLit ? '#ffd76b' : '#e8eefb', 5);
+
+  // player, with a heading tick
+  const px = mx(player.x + P_W / 2), py = my(player.y + P_H / 2);
+  g.strokeStyle = '#fff'; g.lineWidth = 2;
+  g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = '#fff';
+  g.beginPath(); g.arc(px, py, 2.5, 0, Math.PI * 2); g.fill();
+
+  const pct = Math.round(100 * seenRocks / Math.max(1, rocks.filter(r => !r.deck).length));
+  document.getElementById('map-note').textContent =
+    'Charted ' + pct + '% of the islands' +
+    (flags.compass ? ' · compass marks every unopened relic' : '') +
+    ' · the visor charts further while it is up.';
+}
+
 // changelog
 
 document.getElementById('version-badge').addEventListener('click', () => {
@@ -1929,6 +2293,8 @@ document.getElementById('version-badge').addEventListener('click', () => {
 
 document.getElementById('btn-respawn').addEventListener('click', respawn);
 document.getElementById('btn-open-log').addEventListener('click', () => { renderLog(); openOverlay('overlay-log'); });
+document.getElementById('btn-map').addEventListener('click', () => { renderMap(); openOverlay('overlay-map'); });
+document.getElementById('btn-sound').addEventListener('click', toggleAudio);
 document.getElementById('btn-win-close').addEventListener('click', () => {
   document.getElementById('overlay-win').classList.add('hidden');
   document.body.classList.toggle('menu-open', anyOverlayOpen());
@@ -1965,6 +2331,9 @@ document.getElementById('pack-icon').innerHTML = svgIcon('gear-hammer');
 document.getElementById('base-icon').innerHTML = svgIcon('house');
 document.getElementById('cl-icon').innerHTML = svgIcon('mountain-climbing');
 document.getElementById('log-icon').innerHTML = svgIcon('open-book');
+document.getElementById('map-icon').innerHTML = svgIcon('treasure-map');
+document.getElementById('btn-map').innerHTML = svgIcon('treasure-map');
+document.getElementById('btn-sound').innerHTML = svgIcon('sound-on');
 document.getElementById('win-icon').innerHTML = svgIcon('lighthouse');
 
 function updateHUD() {
@@ -2095,6 +2464,37 @@ function drawCliff(r) {
       ctx.fillRect(fx, fy, 8, 3);
     }
   }
+  // route features — the shape of a climb, readable from a distance
+  if (r.features) {
+    for (const f of r.features) {
+      const broken = f.kind === 'crumble' && gameTime < f.brokenUntil;
+      const def = FEATURES[broken ? 'slick' : f.kind];
+      ctx.save();
+      ctx.globalAlpha = broken ? 0.3 : 0.42;
+      ctx.fillStyle = def.color;
+      ctx.fillRect(f.x, f.y, f.w, f.h);
+      ctx.globalAlpha = broken ? 0.45 : 0.85;
+      ctx.strokeStyle = def.color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(f.x + 1, f.y + 1, f.w - 2, f.h - 2);
+      ctx.restore();
+      // texture that reads without colour: notches, rungs, cracks, streaks
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = def.color;
+      if (f.kind === 'hold' && !broken) {
+        for (let i = 6; i < f.w - 6; i += 15) for (let j = 8; j < f.h - 6; j += 16) ctx.fillRect(f.x + i, f.y + j, 6, 4);
+      } else if (f.kind === 'rest') {
+        ctx.fillRect(f.x + 2, f.y + f.h - 4, f.w - 4, 3);
+      } else if (f.kind === 'crumble' && !broken) {
+        for (let i = 8; i < f.w - 4; i += 19) ctx.fillRect(f.x + i, f.y + 5, 2, f.h - 12);
+      } else {
+        for (let j = 8; j < f.h - 4; j += 13) ctx.fillRect(f.x + 5, f.y + j, f.w - 10, 2);
+      }
+      ctx.restore();
+    }
+  }
+
   ctx.fillStyle = 'rgba(255,255,255,0.05)';
   ctx.fillRect(r.x, r.y, 5, r.h);
   // top lip
@@ -2299,6 +2699,17 @@ function render() {
     ctx.beginPath(); ctx.arc(pc2.x, pc2.y, 26 + p2 * 30, 0, Math.PI * 2); ctx.stroke();
   }
 
+  if (crumbleFx) {
+    ctx.save();
+    ctx.globalAlpha = 1 - crumbleFx.t / 0.5;
+    ctx.fillStyle = '#ffb454';
+    for (let i = 0; i < 9; i++) {
+      const a = i * 0.7, d = crumbleFx.t * 190;
+      ctx.fillRect(crumbleFx.x + Math.cos(a) * d, crumbleFx.y + Math.sin(a) * d + crumbleFx.t * 90, 4, 4);
+    }
+    ctx.restore();
+  }
+
   // double-jump puff
   if (jumpFx) {
     ctx.strokeStyle = 'rgba(200,225,255,' + (1 - jumpFx.t / 0.3) + ')';
@@ -2396,6 +2807,29 @@ function render() {
     ctx.fillRect(0, 0, cw, chh);
   }
 
+  // At visor range everything is tiny, so overlay legible markers for the things
+  // that matter: your bases, camp, relics, the summit, and live threats.
+  if (visorOn && flags.visor) {
+    const mark = (wx, wy, icon, col, size) => {
+      const p = w2s(wx, wy);
+      if (p.x < -20 || p.x > cw + 20 || p.y < -20 || p.y > chh + 20) return;
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = 'rgba(10,16,36,0.55)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, (size || 15) + 3, 0, Math.PI * 2); ctx.fill();
+      drawIcon(ctx, icon, p.x, p.y, (size || 15) * 1.6, col);
+      ctx.restore();
+    };
+    mark(CAMP.x, CAMP.y - 20, 'campfire', '#ffb454');
+    for (const b of bases) mark(b.x, b.y - 20, b.wall ? 'hut' : 'house', '#8fc7ff');
+    for (const rl of relics) if (!rl.taken) mark(rl.x, rl.y, 'emerald', '#7dffb0');
+    if (summit) mark(summit.x, summit.y - 20, beaconLit ? 'lighthouse' : 'mountain-climbing', beaconLit ? '#ffd76b' : '#cfe0ff');
+    for (const w of stingwings) mark(w.x, w.y, 'wasp-sting', '#ffd76b', 11);
+    for (const b of razorbeaks) mark(b.x, b.y, 'bat', '#c98ac4', 11);
+    for (const rr of runners) mark(rr.x, rr.rock.y - 18, 'boar', '#e08a5a', 11);
+    for (const th of thermals) mark(th.x, (th.top + th.bottom) / 2, 'windy-stripes', '#cfe0ff', 11);
+  }
+
   // visor tint, so the pulled-back view reads as looking through something
   if (visorOn && flags.visor) {
     ctx.save();
@@ -2469,14 +2903,17 @@ function drawPlayer() {
   ctx.beginPath(); ctx.arc(cx, py + 8, 8, 0, Math.PI * 2); ctx.fill();
 
   const glow = player.state === 'climb';
-  ctx.fillStyle = glow ? '#59d7ff' : '#94a8cf';
+  const gripCol = glow && gripKind ? FEATURES[gripKind].color : '#59d7ff';
+  ctx.fillStyle = glow ? gripCol : '#94a8cf';
   if (glow) {
     // both hands up on the face in front
     const handY = py + 10;
     ctx.beginPath(); ctx.arc(px + 1, handY, 5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(px + P_W - 1, handY, 5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(89,215,255,' + (0.22 + Math.sin(gameTime * 8) * 0.1) + ')';
+    ctx.globalAlpha = 0.22 + Math.sin(gameTime * 8) * 0.1;
+    ctx.fillStyle = gripCol;
     ctx.beginPath(); ctx.arc(cx, handY + 2, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
   } else {
     const handY = py + 24;
     ctx.beginPath(); ctx.arc(px + 3, handY, 4.5, 0, Math.PI * 2); ctx.fill();
@@ -2522,10 +2959,14 @@ function frame(now) {
   const wantScale = baseScale * (visorOn && flags.visor ? T.visorZoom : 1);
   scale = lerp(scale, wantScale, clamp(6 * dt, 0, 1));
 
-  const targetX = clamp(player.x + P_W / 2, WORLD.left, WORLD.right);
-  const targetY = clamp(player.y, WORLD.top, WORLD.cloudSea + 60 - chh / scale / 2);
-  cam.x = lerp(cam.x, targetX, clamp(6 * dt, 0, 1));
-  cam.y = lerp(cam.y, targetY, clamp(6 * dt, 0, 1));
+  // Lead the camera along your velocity so you can see what you are flying into.
+  const leadX = clamp(player.vx * T.lookAhead, -T.lookAheadMax, T.lookAheadMax);
+  const leadY = clamp(player.vy * T.lookAhead * 0.7, -T.lookAheadMax, T.lookAheadMax);
+  const targetX = clamp(player.x + P_W / 2 + leadX, WORLD.left, WORLD.right);
+  const targetY = clamp(player.y + leadY, WORLD.top, WORLD.cloudSea + 60 - chh / scale / 2);
+  // ease harder when the lead is large, so fast flight feels smooth not snappy
+  cam.x = lerp(cam.x, targetX, clamp(4.5 * dt, 0, 1));
+  cam.y = lerp(cam.y, targetY, clamp(4.5 * dt, 0, 1));
 
   render();
   updateHUD();
@@ -2537,6 +2978,7 @@ function step(dt) {
     gameTime += dt;
     updatePlayer(dt);
     updateWorldClock(dt);
+    updateAudio(dt);
     updateVitals(dt);
     updateInteraction(dt);
     updateStingwings(dt);
@@ -2546,6 +2988,7 @@ function step(dt) {
     updateRunners(dt);
     if (pulseFx) { pulseFx.t += dt; if (pulseFx.t > 0.45) pulseFx = null; }
     if (jumpFx) { jumpFx.t += dt; if (jumpFx.t > 0.3) jumpFx = null; }
+    if (crumbleFx) { crumbleFx.t += dt; if (crumbleFx.t > 0.5) crumbleFx = null; }
     for (const c of clouds) {
       c.x += c.v * dt;
       if (c.x > WORLD.right + 250) c.x = -200;
@@ -2558,6 +3001,7 @@ function step(dt) {
 // ---------- boot ----------
 
 const resumed = loadGame();
+
 if (!resumed) {
   generateWorld((Math.random() * 0xffffffff) >>> 0);
   player.x = CAMP.x - P_W / 2;
@@ -2565,10 +3009,13 @@ if (!resumed) {
   lastSafe = CAMP;
 }
 initClouds();
+checkDiscoveries();
+revealAround();
+document.getElementById('btn-sound').innerHTML = svgIcon(audio.on ? 'sound-on' : 'sound-off');
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Long Night', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Reading the Rock', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -2595,6 +3042,14 @@ window.SKYREACH = {
   get storming() { return stormLeft > 0; },
   get windX() { return windX; },
   get scanned() { return scanned; },
+  get known() { return known; },
+  get touchedRock() { return touchedRock; },
+  get seenCells() { return seenCells; },
+  get audio() { return audio; },
+  get gripKind() { return gripKind; },
+  get cam() { return cam; },
+  checkDiscoveries, renderMap, featureAt, toggleAudio, resetGame, revealAllPlans,
+  inThermal,
   get beaconLit() { return beaconLit; },
   get summit() { return summit; },
   set stormLeft(v) { stormLeft = v; },

@@ -62,6 +62,21 @@ Water/thirst is deliberately **not** in scope for now (one survival clock — fo
 
 *Why this replaced the v0.2 corpse-run:* retrieval climbs sounded great on paper, but they punish the player twice — once for dying, again with a mandatory backtrack up terrain they'd already solved. A percentage toll keeps death meaningful without ever making you re-climb for a bag. The grace period matters too: the first hour is when you're still learning that energy runs out, and taxing that is just noise. Bases and storage stay valuable because 25% of a big haul hurts, so stashing before a hard push is still the smart play.
 
+### 4.2½ Routes on the rock **[v0.9]**
+
+Faces are no longer uniform. Every climbable face generates non-overlapping bands of:
+
+| Feature | Cost | Reads as |
+|---|---|---|
+| **Handholds** | 0.45× energy | green, notched |
+| **Rest ledge** | **zero** drain, even hanging | blue rung |
+| **Slick rock** | 2.1× energy | red streaks |
+| **Crumbling** | 1× — but takes your weight for only ~1.6s before it breaks and drops you | orange cracks (heals after ~26s) |
+
+This is the change the whole game was waiting for. Before it, a cliff was a rectangle you held *up* against while a bar drained — there was no route to read, which meant the visor, the cheap idle hang and the ascender were all serving a decision the player never actually made. Now a face has a *good line and a bad line*: string handholds and ledges together and a climb is cheap; cut straight up through slick rock and you arrive with nothing left. Crumbling rock adds a timing beat — you can cross it, you just can't rest on it. Harder rock types get meaner mixes, so tier also changes *texture*, not just permission.
+
+Your gloves glow the colour of whatever you're gripping, and the glove hum shifts pitch with it, so the state is readable without looking at a bar.
+
 ### 4.3⅛ The world clock and weather **[v0.8]**
 
 **Day and night** turn on a 5-minute cycle. The sky shifts through dusk to indigo, stars come out, and two systems change with it: **nightwings hunt harder** (wider detection, faster dives) and **thermals go weak** — they are sun-warmed air, so after dark the free ride mostly stops. Night is not a fail state, it is a *cost change*: the cheap way up closes and the sky gets teeth, so you either provision for it or sleep through it.
@@ -195,6 +210,18 @@ The pack carries a **Playtest** row: +20 materials, +3 base kits, unlock all gea
 
 **Why this is the heart of the game.** A cliff base turns a one-shot energy budget into a staged expedition: climb, bolt in, stash, recharge, climb again. It's the sky equivalent of dropping a Seabase halfway down a trench, and it's what makes the higher bands survivable without simply inflating the battery.
 
+## 7¼. Plans, not a checklist **[v0.9]**
+
+Recipes are **discovered, not listed**. Nothing appears in the fabricator until you have met its reason: pick up fiber and stone and the gloves appear; bounce off basalt and Grip spikes appear; catch a lizard and boots and armor appear; find skysteel and Mk3 appears. The pack shows what you have worked out plus a count of what you haven't.
+
+Two problems this fixes at once. The old pack was a scroll of ~10 mostly-uncraftable rows — the single worst piece of mobile UX in the build — and the world had no teaching layer at all after the goal ticker was cut. Now the game explains itself through play: every discovery is a small reward tied to something you just did, and the list only ever contains things you could plausibly build.
+
+## 7⅓. The sky chart **[v0.9]**
+
+A map button in the HUD opens a chart of the whole world with **fog of war**: islands appear only in 300px cells you have laid eyes on, and the **visor charts twice as far** while it is up, which finally gives the visor a lasting purpose beyond the moment you're looking. It marks camp, every base, unopened relics (all of them, once you have the Relic compass), and the summit. It reports what percentage of the islands you've charted.
+
+The world is ~8000px wide with outposts on both flanks; without this, "where am I and where was that thing" was a real and growing problem.
+
 ## 7½. The field log **[v0.8]**
 
 The **Field scanner** is a cheap early craftable. Hold the hand on anything you have not logged — a rock type, a creature, a thermal, a relic vault — and it goes into an 11-entry **field log** with a line of flavour that is also a hint (*"Schools thicken before a storm"*, *"Lightning finds it, and so do magnets"*).
@@ -247,6 +274,10 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 - Keyboard supported for desktop playtesting: WASD/arrows, Space (jump/hold to glide), E (interact), C (pack).
 - Portrait and landscape both work; canvas scales to viewport.
 
+## 9½. Sound **[v0.9]**
+
+Everything is synthesised with WebAudio — no asset loads, which keeps the whole game a handful of static files. The bed is filtered noise whose level and cutoff track **altitude, airspeed and storms**, so height is audible before it is visible. A sawtooth hum runs only while you are gripping rock and changes pitch by feature (low on a rest ledge, high and thin on slick rock), which makes the climbing state legible without looking. Everything else is short synth blips: grab, jump, land, harvest, scan, craft, discovery, damage, crumble, thunder, beacon. Muted from a HUD toggle, and the preference is saved.
+
 ## 10. Presentation **[v0.1]**
 
 - Vanilla JS + single `<canvas>`, zero dependencies, static files → GitHub Pages.
@@ -266,7 +297,8 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.6 — The Shear**: thermals and the Thermal wing, ridgerunners, dedicated let-go button, Range visor, bottom-anchored menu close, iOS long-press hardening.
 - **0.7 — Wayfarer** *(current build)*: outposts and relics rewarding horizontal travel, world bounds that follow generation, jetpack as a toggle, fixed button grid, vitals above menus.
 - **0.8 — Long Night** *(current build)*: day/night cycle, storms with wind and lightning, sleeping at bases, field scanner and 11-entry log, nest robbing, skysteel, Fabricator Mk3, Storm suit, Ascender rig, and the Signal beacon ending.
-- **0.9 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **0.9 — Reading the Rock** *(current build)*: route features on every face, the sky chart with fog of war, discovery-gated recipes, procedural audio, camera look-ahead, a far wider visor, and no ridgerunner on the start island.
+- **0.10 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
 - **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions

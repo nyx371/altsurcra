@@ -2,6 +2,17 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.9.0 — Reading the Rock (2026-07-26)
+
+- Cliff faces now have routes: handholds are cheap, slick rock is brutal, rest ledges stop the drain, and crumbling rock gives way if you hang on it
+- Your gloves glow the colour of whatever you are gripping
+- Sky chart (map button, top right): fog-of-war of everywhere you have been, with camp, bases, relics and the summit
+- Recipes are discovered, not listed — plans appear when you find the reason for them
+- Sound: procedural wind that follows altitude and storms, glove hum, thunder and more. Toggle top right
+- The camera looks ahead when you move fast, so you can see what you are gliding into
+- The visor pulls back three times further and marks bases, relics, threats and thermals
+- No ridgerunner on the starting island
+
 ## v0.8.0 — Long Night (2026-07-26)
 
 - Day and night: the sky turns, stars come out, nightwings hunt harder and thermals go weak after dark

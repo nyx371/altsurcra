@@ -23,9 +23,15 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Jetpack thrust (tap to toggle, once crafted) | thruster button | Shift |
 | Let go of the wall | release button (appears while climbing) | Q |
 | Range visor: zoom way out (once crafted) | binocular button | V |
+| Sky chart | map button (top right) | M |
+| Mute / unmute | speaker button (top right) | — |
 | Enter base | house button (appears in range) | E |
 | Pack + personal fabricator | knapsack button | C |
 | Changelog + wipe save / remix world | version badge (top right) | — |
+
+Cliff faces have **routes**: green handholds are cheap, blue rest ledges cost nothing at all, red slick rock burns energy twice as fast, and orange crumbling rock only takes your weight for a moment before it breaks. Your gloves glow the colour of whatever you're gripping. Read the line before you commit to it.
+
+Recipes are **discovered, not listed** — plans appear when you find the reason for them, so the fabricator only ever shows things you could actually build.
 
 You start bare-handed: gather on foot, hop the low hills, and fabricate **Magnetic gloves** before any cliff will take you. After that, cliffs never block you — walk in front of them, hold up to grab the face, and climb anywhere on it. Climbing drains glove energy and at zero you fall. Recharge on flat ground, fastest near the camp or a base. Granite needs gloves; basalt needs **Grip spikes**; storm rock needs **Resonant magnets**.
 

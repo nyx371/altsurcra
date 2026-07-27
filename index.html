@@ -21,7 +21,11 @@
     <div class="bar hidden" id="bar-fuel"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
     <div id="weather" class="hidden"></div>
   </div>
+  <div class="hud-right">
+  <button id="btn-sound" class="hud-btn" type="button"></button>
+  <button id="btn-map" class="hud-btn" type="button"></button>
   <button id="version-badge" type="button"><span class="badge-icon"></span><span id="version-text"></span></button>
+  </div>
 </div>
 
 <div id="toasts"></div>
@@ -85,6 +89,15 @@
     <button id="btn-reset" class="mini-btn danger" type="button">Restart — wipe save &amp; remix world</button>
     <div id="changelog-body"></div>
     <p class="panel-note">Progress saves to this device automatically. Icons by <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> contributors (CC BY 3.0).</p>
+    <button class="close-bar" data-close type="button">Close</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay-map">
+  <div class="panel wide">
+    <div class="panel-head"><span class="panel-icon" id="map-icon"></span><h2>Sky chart</h2></div>
+    <canvas id="map-canvas"></canvas>
+    <p class="panel-note" id="map-note"></p>
     <button class="close-bar" data-close type="button">Close</button>
   </div>
 </div>
