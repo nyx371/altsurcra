@@ -5,7 +5,7 @@ One file, one browser, one pass. The game has no dependencies; this suite needs
 
 ```sh
 cd tests && npm install
-node regress.js                 # everything, ~70s
+node regress.js                 # everything, ~75s
 node regress.js world drift     # just the named groups
 VERBOSE=1 node regress.js       # print every passing check, not just failures
 CHROMIUM=/path/to/chromium node regress.js
@@ -23,6 +23,7 @@ Groups, in the order they run:
 | `threats` | stingwing sting-and-peel, the shield, the pulse, ridgerunners, taming, shardlings, the Skywyrm, storms and lightning |
 | `economy` | discovery gating, pooled crafting, the death toll, the field log, the survey lens, the ending |
 | `ui` | fixed button grid, panel tabs, message placement, vitals over menus, survey view, sky chart, audio, no emoji, iOS hardening |
+| `debug` | invincible and fly mode: what they ignore, what they flag, and that neither ever reaches a save |
 | `persistence` | one save/load round trip covering every system, then a wipe |
 | `perf` | 60fps with a large drift loaded, normal and at survey range |
 

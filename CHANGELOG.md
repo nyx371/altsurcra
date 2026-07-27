@@ -2,6 +2,12 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.14.1 — Debug Modes (2026-07-27)
+
+- **Invincible** (cheats row, or `I`): hits, bleed damage and starvation all do nothing, and falling past the cloud sea puts you back at your last safe spot instead of killing you
+- **Fly mode** (cheats row, or `G`): the stick moves you freely in eight directions at 520px/s — no gravity, no collision, no glove energy. Turning it off hands you cleanly back to gravity
+- Both are **modes, not grants**: they flag themselves on the HUD for as long as they are on, their buttons read as switches, and neither is ever written to the save — waking up silently invincible would quietly corrupt the playtest feedback they exist to gather
+
 ## v0.14.0 — Skyrunner (2026-07-27)
 
 - **Skyrunner** (Mk3: 10 skysteel, 6 hide, 6 silk, 12 ore, 10 crystal): a real airship. Board it from its own button, fly in any direction with no fuel, no glove energy and no gravity, and step off whenever you like. Take a hit too many and it goes down to the nearest deck and mends itself there — you are never stranded

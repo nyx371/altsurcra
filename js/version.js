@@ -1,8 +1,18 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.14.0';
+const GAME_VERSION = '0.14.1';
 
 const CHANGELOG = [
+  {
+    version: '0.14.1',
+    name: 'Debug Modes',
+    date: '2026-07-27',
+    notes: [
+      'Invincible (I): nothing hurts you, and the cloud sea catches you instead of killing you',
+      'Fly mode (G): the stick moves you freely in any direction, through rock, with no gravity',
+      'Both flag themselves permanently on the HUD, and neither is ever written to the save',
+    ],
+  },
   {
     version: '0.14.0',
     name: 'Skyrunner',

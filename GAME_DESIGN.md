@@ -245,7 +245,9 @@ A cheap craftable that toggles the camera **half-scale**, showing the island cha
 
 ### 6.5 Playtest cheats **[v0.4]**
 
-The pack carries a **Playtest** row: +20 materials, +3 base kits, +3 zipline kits, restore all stripped resources, unlock all gear, refill vitals. Restart-and-remix sits at the top of the changelog panel. These are deliberately in the shipped build — this is a design tool as much as a game right now, and being able to jump straight to "what does storm rock feel like with Mk2" beats replaying the opening every time. They come out (or go behind a tap-the-version-five-times gesture) when we start showing it to fresh players.
+The pack carries a **Playtest** row: +20 materials, +3 base kits, +3 zipline kits, restore all stripped resources, unlock all gear, refill vitals, build the Skyrunner, summon the Skywyrm — and two **modes**, Invincible (`I`) and Fly (`G`).
+
+**Grants versus modes [v0.14.1].** Everything else in the row is a one-shot grant: it changes the world or your inventory and then it is over, and it belongs in the save because the world it changed is in the save. The two debug modes are different — they change what the rules *mean* while they are on. So they get different treatment: a permanent flashing HUD flag, buttons that read as switches rather than actions, and **no persistence at all**. Reloading always comes back clean. A saved "invincible" silently carried into a later session would not just be a bug, it would quietly invalidate every observation made afterwards, which is exactly what the cheat row exists to protect. Restart-and-remix sits at the top of the changelog panel. These are deliberately in the shipped build — this is a design tool as much as a game right now, and being able to jump straight to "what does storm rock feel like with Mk2" beats replaying the opening every time. They come out (or go behind a tap-the-version-five-times gesture) when we start showing it to fresh players.
 
 ## 7. Bases **[v0.2]**
 

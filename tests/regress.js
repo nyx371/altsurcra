@@ -1618,6 +1618,133 @@ group('persistence', async (t) => {
   ok('and starts you clean', fresh.gloves === false && fresh.inv === 0 && fresh.bases === 0, fresh);
 });
 
+// The two debug modes. They are playtest tools, so the thing that matters most
+// is that you can always tell they are on and that they never reach a save.
+group('debug', async (t) => {
+  const { S, page, waitFor } = t;
+  await t.reset();
+
+  const off = await S(() => ({
+    inv: window.SKYREACH.debug.invincible, fly: window.SKYREACH.debug.fly,
+    hud: document.getElementById('debug-flags').classList.contains('hidden'),
+  }));
+  ok('both debug modes start off', off.inv === false && off.fly === false, off);
+  ok('and the HUD says nothing', off.hud === true);
+
+  // invincible
+  await page.keyboard.press('KeyI');
+  await page.waitForTimeout(150);
+  const inv = await S(() => ({
+    on: window.SKYREACH.debug.invincible,
+    hud: !document.getElementById('debug-flags').classList.contains('hidden'),
+    icons: document.querySelectorAll('#debug-flags .d-icon').length,
+  }));
+  ok('a key toggles invincible', inv.on === true, inv);
+  ok('and the HUD flags it', inv.hud && inv.icons === 1, inv);
+
+  const shrugged = await S(async () => {
+    const K = window.SKYREACH;
+    K.player.hp = 100; K.player.invuln = 0; K.player.food = 100;
+    K.hurt(90, 'test');            // a direct hit
+    const afterHurt = K.player.hp;
+    K.bleed(90, 'test');           // continuous damage, which bypasses invuln
+    const afterBleed = K.player.hp;
+    K.player.food = 0;
+    return new Promise(r => setTimeout(() => r({
+      afterHurt, afterBleed, hp: K.player.hp, dead: K.deathCause,
+    }), 500));
+  });
+  ok('invincible ignores a direct hit', shrugged.afterHurt === 100, shrugged);
+  ok('and continuous damage', shrugged.afterBleed === 100, shrugged);
+  ok('and starvation', shrugged.hp === 100 && shrugged.dead === null, shrugged);
+
+  const caught = await S(async () => {
+    const K = window.SKYREACH;
+    K.player.food = 100; K.player.hp = 100;
+    K.player.y = K.world.kill + 60; K.player.vy = 400;
+    return new Promise(r => setTimeout(() => r({
+      y: K.player.y, dead: K.deathCause,
+      shown: !document.getElementById('overlay-death').classList.contains('hidden'),
+    }), 600));
+  });
+  ok('the cloud sea catches you instead of killing you', caught.dead === null && !caught.shown, caught);
+  ok('and puts you back above the world', caught.y < 2900, Math.round(caught.y));
+
+  await page.keyboard.press('KeyI');
+  await page.waitForTimeout(150);
+  const back = await S(async () => {
+    const K = window.SKYREACH;
+    K.player.hp = 100; K.player.invuln = 0;
+    K.hurt(30, 'test');
+    return { on: K.debug.invincible, hp: K.player.hp, hud: document.getElementById('debug-flags').classList.contains('hidden') };
+  });
+  ok('toggling it off restores damage', back.on === false && back.hp === 70, back);
+  ok('and clears the HUD flag', back.hud === true);
+
+  // fly
+  await t.onDeck();
+  await page.keyboard.press('KeyG');
+  await page.waitForTimeout(150);
+  ok('a key toggles fly mode', await S(() => window.SKYREACH.debug.fly) === true);
+  const from = await S(() => ({ x: window.SKYREACH.player.x, y: window.SKYREACH.player.y }));
+  await t.key('ArrowUp', 600);
+  const rose = await S((f) => ({ dy: window.SKYREACH.player.y - f.y, st: window.SKYREACH.player.state }), from);
+  ok('the stick flies you straight up', rose.dy < -200, Math.round(rose.dy));
+  const hover = await S(async () => {
+    const K = window.SKYREACH;
+    const y0 = K.player.y;
+    return new Promise(r => setTimeout(() => r({ drift: K.player.y - y0 }), 700));
+  });
+  ok('and you hang there without gravity', Math.abs(hover.drift) < 4, Math.round(hover.drift));
+
+  const through = await S(async () => {
+    const K = window.SKYREACH;
+    // park inside solid rock: fly mode ignores collision entirely
+    const r = K.rocks.find(x => x.h > 200 && !x.deck);
+    K.player.x = r.x + r.w / 2; K.player.y = r.y + r.h / 2;
+    return new Promise(res => setTimeout(() => res({
+      inside: K.player.x > r.x && K.player.x < r.x + r.w && K.player.y > r.y && K.player.y < r.y + r.h,
+      st: K.player.state,
+    }), 400));
+  });
+  ok('fly mode passes straight through rock', through.inside === true && through.st === 'air', through);
+  ok('and keeps the batteries full', await S(() => window.SKYREACH.player.energy === window.SKYREACH.player.maxEnergy) === true);
+
+  await page.keyboard.press('KeyG');
+  await page.waitForTimeout(150);
+  const landed = await waitFor(() => window.SKYREACH.player.state === 'ground' || window.SKYREACH.player.vy > 100, null, 4000);
+  ok('turning it off hands you back to gravity', landed === true,
+    await S(() => ({ st: window.SKYREACH.player.state, vy: Math.round(window.SKYREACH.player.vy) })));
+
+  // the buttons are switches, and neither mode is ever written to the save
+  await t.revive();
+  await page.click('#btn-pack');
+  await page.waitForTimeout(250);
+  await t.tab('pack-tabs', 'cheats');
+  const btns = await S(() => {
+    const i = document.querySelector('[data-cheat="invincible"]');
+    const f = document.querySelector('[data-cheat="fly"]');
+    i.click();
+    return { exist: !!i && !!f, onAfterClick: i.classList.contains('on'), flyOff: !f.classList.contains('on') };
+  });
+  ok('both modes have cheat buttons', btns.exist === true);
+  ok('and the button shows the state', btns.onAfterClick === true && btns.flyOff === true, btns);
+  await t.closePanels();
+
+  const saved = await S(() => {
+    const K = window.SKYREACH;
+    K.debug.fly = true;
+    K.saveGame();
+    const raw = JSON.parse(localStorage.getItem('skyreach.save.v2'));
+    return { keys: Object.keys(raw).filter(k => /debug|invinc|fly/i.test(k)), inv: K.debug.invincible };
+  });
+  ok('debug state is never written to the save', saved.keys.length === 0, saved.keys);
+  await page.reload();
+  await page.waitForTimeout(800);
+  const afterLoad = await S(() => ({ inv: window.SKYREACH.debug.invincible, fly: window.SKYREACH.debug.fly }));
+  ok('and a reload always comes back clean', afterLoad.inv === false && afterLoad.fly === false, afterLoad);
+});
+
 // It has to hold 60fps with the world fully loaded, in both layouts.
 group('perf', async (t) => {
   const { S } = t;

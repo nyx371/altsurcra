@@ -448,6 +448,25 @@ button { touch-action: manipulation; } /* taps fire instantly, double-tap never 
 .win-icon { display: block; width: 54px; height: 54px; margin: 4px auto 8px; color: #ffd76b; }
 #btn-interact.scanning { border-color: rgba(159,245,196,.85); color: #9ff5c4; }
 
+/* debug modes, flagged permanently on the HUD while they are on */
+#debug-flags { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+#debug-flags.hidden { display: none; }
+#debug-flags .d-icon {
+  width: 19px; height: 19px; color: #ffd76b;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.7));
+  animation: dbgpulse 1.6s ease-in-out infinite;
+}
+@keyframes dbgpulse { 50% { opacity: .45; } }
+body.menu-open #debug-flags .d-icon { width: 15px; height: 15px; }
+
+/* a cheat that is a mode, not a grant, has to look like a switch */
+.cheat-row .mini-btn.toggle { border: 1px solid rgba(255,255,255,.18); }
+.cheat-row .mini-btn.toggle.on {
+  background: rgba(255, 215, 107, .28);
+  border-color: rgba(255, 215, 107, .8);
+  color: #ffd76b;
+}
+
 /* storm + night HUD flags */
 #weather { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
 #weather .w-icon { width: 17px; height: 17px; }

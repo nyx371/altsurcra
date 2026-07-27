@@ -115,6 +115,7 @@ const T = {
   leviShipDamage: 26,
   leviCooldown: 2.4,
   leviCalm: 26,           // seconds of being left alone before it settles again
+  flySpeed: 520,          // debug free-flight
   lookAhead: 0.55,        // how far the camera leads your velocity
   lookAheadMax: 320,
   runnerSpeed: 96,
@@ -956,6 +957,10 @@ const flags = {
   glider2: false, shield: false, airship: false,
 };
 let visorOn = false;
+// Debug modes. These are session-only on purpose: they are never written to the
+// save, because waking up silently invincible would quietly corrupt the very
+// playtest feedback they exist to gather.
+const debug = { invincible: false, fly: false };
 let panX = 0, panY = 0;   // survey-view camera offset while the visor is up
 let tracked = null;  // material the survey lens is pointing at
 let jetOn = false;
@@ -1241,6 +1246,9 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyV') toggleVisor();
   if (e.code === 'KeyZ') toggleZip();
   if (e.code === 'KeyB') { if (player.state === 'ship') leaveShip(); else boardShip(); }
+  // debug modes, reachable without opening the pack mid-fall
+  if (e.code === 'KeyI') { CHEATS.invincible(); renderCheatToggles(); renderPack(); }
+  if (e.code === 'KeyG') { CHEATS.fly(); renderCheatToggles(); renderPack(); }
   if (e.code === 'KeyF') { btnState.feed = true; setTimeout(() => { btnState.feed = false; }, T.feedTime * 1000 + 120); }
   if (e.code === 'KeyM') { renderMap(); openOverlay('overlay-map'); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleJet();
@@ -1582,6 +1590,24 @@ function updatePlayer(dt) {
   player.invuln = Math.max(0, player.invuln - dt);
   if (input.x !== 0) player.faceDir = input.x > 0 ? 1 : -1;
 
+  // debug free flight: no gravity, no rock, no energy. Runs ahead of everything
+  // else so no other movement state can argue with it.
+  if (debug.fly) {
+    if (player.state === 'ship') { airship.piloted = false; }
+    player.state = 'air';
+    player.climbRect = null;
+    player.zip = null;
+    player.harvest = null;
+    player.vx = input.x * T.flySpeed;
+    player.vy = input.y * T.flySpeed;
+    player.x = clamp(player.x + player.vx * dt, WORLD.left, WORLD.right - P_W);
+    player.y = clamp(player.y + player.vy * dt, WORLD.top, WORLD.kill - 40);
+    player.jumps = 0;
+    player.energy = player.maxEnergy;
+    player.fuel = maxFuel();
+    return;
+  }
+
   // aboard the airship, updateAirship drives everything
   if (player.state === 'ship') {
     if (!airship || !airship.piloted) player.state = 'air';
@@ -1792,7 +1818,7 @@ function updatePlayer(dt) {
 let deathCause = null;
 
 function hurt(dmg, cause) {
-  if (player.invuln > 0 || deathCause) return;
+  if (debug.invincible || player.invuln > 0 || deathCause) return;
   sfx('hurt');
   if (flags.stormsuit) dmg *= 0.4;
   else if (flags.armor) dmg *= (1 - T.armorSoak);
@@ -1815,7 +1841,7 @@ function applyDeathToll() {
 }
 
 function die(cause) {
-  if (deathCause) return;
+  if (debug.invincible || deathCause) return;
   deathCause = cause;
   paused = true;
   const lost = applyDeathToll();
@@ -1854,7 +1880,15 @@ function updateVitals(dt) {
   player.food = Math.max(0, player.food - T.foodDrain * dt);
   if (player.food <= 0) hurtStarve(T.starveDps * dt);
   else if (player.food > 60 && player.hp < 100) player.hp = Math.min(100, player.hp + T.healthRegen * dt);
-  if (player.y > WORLD.kill) die('You fell into the cloud sea');
+  if (player.y > WORLD.kill) {
+    if (debug.invincible) {
+      // no death screen, but you cannot be left sitting below the world either
+      const sp = standPos(lastSafe || CAMP);
+      player.x = sp.x - P_W / 2; player.y = sp.y - P_H - 2;
+      player.vx = 0; player.vy = 0; player.state = 'air';
+      toast('Caught you — invincible', 'good', 'heart-shield');
+    } else die('You fell into the cloud sea');
+  }
 }
 
 // The Wing shield turns a flying attack aside for a little glove energy. It is
@@ -1873,7 +1907,7 @@ let shieldToastAt = -99;
 // Continuous environmental damage: no invulnerability window (it would make a
 // per-second effect meaningless) but armour still counts.
 function bleed(dmg, cause) {
-  if (deathCause) return;
+  if (debug.invincible || deathCause) return;
   if (flags.stormsuit) dmg *= 0.4;
   else if (flags.armor) dmg *= (1 - T.armorSoak);
   player.hp -= dmg;
@@ -1881,7 +1915,7 @@ function bleed(dmg, cause) {
 }
 
 function hurtStarve(dmg) {
-  if (deathCause) return;
+  if (debug.invincible || deathCause) return;
   player.hp -= dmg;
   if (player.hp <= 0) die('Starved in the high air');
 }
@@ -3198,6 +3232,7 @@ function renderPack() {
   if (!any) grid.innerHTML = '<div class="inv-empty">Empty</div>';
   renderLog();
   renderSurvey();
+  renderCheatToggles();
 
   const list = document.getElementById('recipe-list');
   list.innerHTML = '';
@@ -3347,6 +3382,24 @@ const CHEATS = {
     leviathan.mode = 'patrol'; leviathan.warned = false;
     toast('Skywyrm brought in close', 'bad', 'sea-serpent');
   },
+  invincible() {
+    debug.invincible = !debug.invincible;
+    if (debug.invincible) { player.hp = 100; deathCause = null; }
+    toast(debug.invincible ? 'Invincible on' : 'Invincible off', debug.invincible ? 'good' : 'bad', 'heart-shield');
+  },
+  fly() {
+    debug.fly = !debug.fly;
+    if (debug.fly) {
+      if (player.state === 'zip') dismountZip(false);
+      if (player.state === 'ship') leaveShip();
+      player.state = 'air'; player.climbRect = null;
+    } else {
+      // hand you back to gravity cleanly rather than mid-nothing
+      player.vx = 0; player.vy = 0;
+      player.detachTimer = 0.2;
+    }
+    toast(debug.fly ? 'Fly mode on — the stick moves you' : 'Fly mode off', debug.fly ? 'good' : 'bad', 'wingfoot');
+  },
   regrow() {
     // put every stripped node back — for testing the world, not for playing it
     for (const n of NODES) n.spent = false;
@@ -3357,10 +3410,19 @@ const CHEATS = {
 document.querySelectorAll('[data-cheat]').forEach(btn => {
   btn.addEventListener('click', () => {
     CHEATS[btn.dataset.cheat]();
+    renderCheatToggles();
     renderPack();
     saveGame();
   });
 });
+
+// The two debug modes are states, not grants, so their buttons have to show it.
+function renderCheatToggles() {
+  for (const [cheat, on] of [['invincible', debug.invincible], ['fly', debug.fly]]) {
+    const btn = document.querySelector('[data-cheat="' + cheat + '"]');
+    if (btn) btn.classList.toggle('on', on);
+  }
+}
 
 // ---------- panel tabs ----------
 // Long panels became a scroll marathon once the fabricator filled up. Tabs live
@@ -3700,6 +3762,18 @@ function updateHUD() {
   btnJet.classList.toggle('glide-ready', flags.jetpack && player.fuel > 0);
   btnJet.classList.toggle('firing', flags.jetpack && jetOn && input.jetHeld && player.fuel > 0);
   btnJump.classList.toggle('thrusting', flags.jetpack && jetOn);
+
+  // debug modes get their own strip: forgetting one is on turns every later
+  // observation into a lie
+  const dbg = document.getElementById('debug-flags');
+  const dState = (debug.invincible ? 'i' : '') + (debug.fly ? 'f' : '');
+  if (dbg.dataset.state !== dState) {
+    dbg.dataset.state = dState;
+    dbg.innerHTML =
+      (debug.invincible ? '<span class="d-icon">' + svgIcon('heart-shield') + '</span>' : '') +
+      (debug.fly ? '<span class="d-icon">' + svgIcon('wingfoot') + '</span>' : '');
+    dbg.classList.toggle('hidden', !dState);
+  }
 
   // weather + clock strip under the bars
   const w = document.getElementById('weather');
@@ -4662,6 +4736,7 @@ window.SKYREACH = {
   get panX() { return panX; }, get panY() { return panY; },
   surveyRemaining, nearestTracked, trackMaterial, renderSurvey,
   get tracked() { return tracked; },
+  get debug() { return debug; },
   get baseScale() { return baseScale; },
   get nodeTypes() { return NODE_TYPES; },
   get jetOn() { return jetOn; },
@@ -4685,7 +4760,7 @@ window.SKYREACH = {
   get summit() { return summit; },
   set stormLeft(v) { stormLeft = v; },
   set stormTimer(v) { stormTimer = v; },
-  isNight, lightBeacon, restUntilDawn,
+  isNight, lightBeacon, restUntilDawn, hurt, bleed,
   get world() { return WORLD; },
   get visorOn() { return visorOn; },
   get scale() { return scale; },

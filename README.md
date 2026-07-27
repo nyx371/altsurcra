@@ -31,6 +31,8 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Enter base | house button (appears in range) | E |
 | Pack + personal fabricator | knapsack button | C |
 | Changelog + wipe save / remix world | version badge (top right) | — |
+| Debug: invincible | cheats row | I |
+| Debug: fly mode | cheats row | G |
 
 Cliff faces have **routes**, drawn in the rock's own colour with distinct patterns: dotted **handholds** are cheap, **rest ledges** (rungs) cost nothing at all, streaked **slick rock** slides you downward, toothed **razor shale** cuts you while you hang on it, and cracked **crumbling rock** only takes your weight for a moment before it breaks. Your gloves glow the colour of whatever you're gripping. Read the line before you commit to it.
 
@@ -54,7 +56,7 @@ A **Zipline kit** (4 ore, 2 crystal, 4 fiber, at a Mk2) strings a **motorised ca
 
 Your first four falls are free. From the fifth on, each death costs a quarter of the raw materials you're carrying — gear and upgrades are never lost, and nothing is left behind in the world to go fetch.
 
-The pack has a **Playtest cheats** row (materials, base kits, zipline kits, restore stripped resources, unlock gear, refill vitals), and **Restart** sits at the top of the changelog panel.
+The pack has a **Playtest cheats** row (materials, base kits, zipline kits, restore stripped resources, unlock gear, refill vitals, plus **Invincible** and **Fly mode**, which flag themselves on the HUD and never persist), and **Restart** sits at the top of the changelog panel.
 
 ## The world
 
