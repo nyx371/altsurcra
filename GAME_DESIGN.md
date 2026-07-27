@@ -427,6 +427,32 @@ The camera also **leads your velocity** (up to 320px) so you can see what you ar
 - All UI symbols and in-world markers are **game-icons.net** glyphs (CC BY 3.0), rendered from inlined path data — no emojis, no external asset loads.
 - Version badge always on screen; tapping it shows the changelog ("what's in this build") — the playtest contract.
 
+## 10½. Testing **[v0.14]**
+
+`tests/regress.js` — one browser, one page, one pass, about seventy seconds for
+217 checks in ten groups (`world`, `drift`, `movement`, `rock`, `harvest`,
+`threats`, `economy`, `ui`, `persistence`, `perf`). It replaced fourteen
+per-version suites that took four and a half minutes between them.
+
+Three rules make it fast and keep it honest:
+
+1. **If it is a property of generation or of the DOM, it runs as one in-page
+   evaluate with no waiting.** Thirty seeds' worth of island sizes, material
+   floors, hill reachability and route features is a single call — `world` and
+   `drift` together are under two seconds for 36 checks. Only things that
+   genuinely need frames to elapse cost wall-clock.
+2. **Poll for the condition, never sleep a guess.** Fixed waits were most of the
+   old runtime and all of the old flakiness: a grazer steps back before it lets
+   you take hold, a boar wanders while it eats, and any hard-coded delay is
+   either too short on a slow frame or wasted on a fast one.
+3. **Assert the design number, not the direction.** "The wing is better than the
+   parachute" passes when the wing is 6% better; "a parachute is roughly 1:1 and
+   a wing beats 2:1" does not. The suite is mutation-checked — deliberately
+   breaking gloves-gating, thorn, razor shale, crumbling rock, drift determinism,
+   island size, the scanner, the death toll, the survey lens's fog of war, panel
+   tabs, zipline steering, airship gravity and zipline persistence each produce a
+   failure. Three checks that a mutation walked straight through were rewritten.
+
 ## 11. Versioning & playtest cadence
 
 Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each version ships with in-game changelog notes. Rough roadmap:

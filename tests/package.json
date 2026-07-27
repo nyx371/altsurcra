@@ -1,0 +1,7 @@
+{
+  "name": "skyreach-tests",
+  "private": true,
+  "description": "Regression suite for Skyreach. The game itself has no dependencies; this does.",
+  "scripts": { "test": "node regress.js" },
+  "devDependencies": { "playwright-core": "^1.44.0" }
+}

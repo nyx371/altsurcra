@@ -74,6 +74,11 @@ Build a **Field scanner** and everything you take, touch or fly through logs its
 
 Progress autosaves to your device.
 
+## Tests
+
+`tests/regress.js` is the whole regression suite: one browser, one pass, ~70s for
+217 checks across ten groups. See [tests/README.md](tests/README.md).
+
 ## Credits
 
 All UI and world symbols are from [game-icons.net](https://game-icons.net) (Lorc, Delapouite and contributors), licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), inlined as path data in `js/icons.js`. No other external assets.

@@ -4679,7 +4679,7 @@ window.SKYREACH = {
   get codexKeys() { return CODEX_KEYS; },
   mixHex,
   get cam() { return cam; },
-  checkDiscoveries, renderMap, featureAt, toggleAudio, resetGame, revealAllPlans,
+  checkDiscoveries, renderMap, renderPack, featureAt, toggleAudio, resetGame, revealAllPlans,
   inThermal,
   get beaconLit() { return beaconLit; },
   get summit() { return summit; },
