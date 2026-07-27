@@ -2,6 +2,16 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.10.0 — Thorn and Shale (2026-07-26)
+
+- Cliff patches are now tinted from the rock they sit on — subtle, but the patterns still read at a glance
+- Razor shale: holds your weight and cuts you while you hang on it
+- Slick rock is properly slippery — you slide down it instead of just paying more
+- Thorn grows across cliff lips and blocks you from topping out until it is cut
+- Thorn hook (3 stone, 2 fiber): the first tool, and the first real goal before the glider
+- A wrecked expedition sits beside camp — search it once for supplies, scan it for the log
+- Cut thorn pays fiber and grows back in time
+
 ## v0.9.0 — Reading the Rock (2026-07-26)
 
 - Cliff faces now have routes: handholds are cheap, slick rock is brutal, rest ledges stop the drain, and crumbling rock gives way if you hang on it

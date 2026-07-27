@@ -29,7 +29,9 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Pack + personal fabricator | knapsack button | C |
 | Changelog + wipe save / remix world | version badge (top right) | — |
 
-Cliff faces have **routes**: green handholds are cheap, blue rest ledges cost nothing at all, red slick rock burns energy twice as fast, and orange crumbling rock only takes your weight for a moment before it breaks. Your gloves glow the colour of whatever you're gripping. Read the line before you commit to it.
+Cliff faces have **routes**, drawn in the rock's own colour with distinct patterns: dotted **handholds** are cheap, **rest ledges** (rungs) cost nothing at all, streaked **slick rock** slides you downward, toothed **razor shale** cuts you while you hang on it, and cracked **crumbling rock** only takes your weight for a moment before it breaks. Your gloves glow the colour of whatever you're gripping. Read the line before you commit to it.
+
+**Thorn** grows across cliff lips and stops you topping out. Craft the **Thorn hook** (3 stone, 2 fiber) to cut through — it pays fiber back, and the thorn regrows in time. Search the **wrecked expedition** beside camp for starting supplies.
 
 Recipes are **discovered, not listed** — plans appear when you find the reason for them, so the fabricator only ever shows things you could actually build.
 

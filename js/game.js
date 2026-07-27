@@ -104,6 +104,8 @@ const T = {
   boltDamage: 22,
   boltEvery: 4.5,
   scanTime: 1.3,
+  brambleCut: 1.4,        // seconds to hack through a bramble
+  brambleRegrow: 260,
   crumbleHold: 1.6,       // seconds a crumbling patch takes your weight
   crumbleHeal: 26,
   featureFeedback: 0.9,
@@ -112,13 +114,25 @@ const T = {
 };
 
 // What a stretch of rock is like under your hands. Routes are made of these:
-// a good line strings holds and ledges together, a bad one crosses slick rock.
+// a good line strings holds and ledges together, a bad one crosses the rest.
+// `tint` is blended into the host rock's own colour so patches read as part of
+// the cliff rather than stickers on it — the pattern does the identifying.
 const FEATURES = {
-  hold:    { name: 'Handholds',    drain: 0.45, color: '#7ddc7d', mark: 'grab' },
-  rest:    { name: 'Rest ledge',   drain: 0,    color: '#8fc7ff', mark: 'ladder' },
-  slick:   { name: 'Slick rock',   drain: 2.1,  color: '#ff8a94', mark: 'windy-stripes' },
-  crumble: { name: 'Crumbling',    drain: 1.0,  color: '#ffb454', mark: 'broken-wall' },
+  hold:    { name: 'Handholds',  drain: 0.45, tint: '#8fe08a', mix: 0.34, mark: 'grab' },
+  rest:    { name: 'Rest ledge', drain: 0,    tint: '#9fd0ff', mix: 0.38, mark: 'ladder' },
+  slick:   { name: 'Slick rock', drain: 1.35, tint: '#cfe3f2', mix: 0.30, mark: 'windy-stripes', slide: 62 },
+  sharp:   { name: 'Razor shale',drain: 1.15, tint: '#ff9a86', mix: 0.30, mark: 'razor-blade', dps: 7 },
+  crumble: { name: 'Crumbling',  drain: 1.0,  tint: '#f0b070', mix: 0.30, mark: 'broken-wall' },
 };
+
+// blend a feature tint into the rock it sits on
+function mixHex(a, b, k) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round(((pa >> 16) & 255) * (1 - k) + ((pb >> 16) & 255) * k);
+  const g = Math.round(((pa >> 8) & 255) * (1 - k) + ((pb >> 8) & 255) * k);
+  const bl = Math.round((pa & 255) * (1 - k) + (pb & 255) * k);
+  return 'rgb(' + r + ',' + g + ',' + bl + ')';
+}
 
 // Everything you can point the scanner at. Completing the log is the run's
 // long-form collectible and unlocks the summit beacon.
@@ -134,6 +148,8 @@ const CODEX = {
   thermal:   { name: 'Thermal',      icon: 'windy-stripes',   note: 'Warm air off sunlit rock. Weaker at night, fierce in a storm.' },
   relic:     { name: 'Relic vault',  icon: 'ancient-ruins',   note: 'Someone built up here before the islands drifted apart.' },
   skysteel:  { name: 'Skysteel',     icon: 'metal-bar',       note: 'Only forms where the air thins. The islands are seeded with it.' },
+  bramble:   { name: 'Cliff thorn',  icon: 'thorny-vine',     note: 'Roots in the lip of a face and crowds the top. Cut it and it grows back in time.' },
+  sharp:     { name: 'Razor shale',  icon: 'razor-blade',     note: 'Splits into blades. It will hold your weight and open your hands doing it.' },
 };
 const CODEX_KEYS = Object.keys(CODEX);
 
@@ -175,6 +191,7 @@ const GEN_SPAN = 7200; // how wide generation is allowed to spread
 
 let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [], skyfish = [];
 let thermals = [], runners = [], relics = [];
+let brambles = [], wreck = null;
 let summit = null;
 let CAMP = { x: 300, y: 2500 };
 let worldSeed = 0;
@@ -185,8 +202,8 @@ function faceFeatures(r, rnd) {
   if (r.h < 110 || r.w < 40) return [];
   const out = [];
   const R = (a, b) => a + rnd() * (b - a);
-  const mix = r.type === 'stormrock' ? ['slick', 'crumble', 'hold', 'slick', 'rest', 'crumble']
-    : r.type === 'basalt' ? ['slick', 'hold', 'crumble', 'hold', 'rest', 'slick']
+  const mix = r.type === 'stormrock' ? ['sharp', 'crumble', 'hold', 'slick', 'rest', 'sharp']
+    : r.type === 'basalt' ? ['slick', 'hold', 'sharp', 'hold', 'rest', 'crumble']
     : ['hold', 'hold', 'rest', 'slick', 'crumble', 'hold'];
   const rows = Math.max(2, Math.floor(r.h / 95));
   for (let i = 0; i < rows; i++) {
@@ -224,6 +241,26 @@ function featureAt(rect, px, py) {
   return null;
 }
 
+// A wall of thorn across a cliff lip. You cannot mantle through one until it is
+// cut, which turns "climb to the top" into a goal you need a tool for.
+function addBramble(r, rnd) {
+  const w = Math.min(r.w, 60 + rnd() * 90);
+  const x = r.x + rnd() * Math.max(1, r.w - w);
+  brambles.push({
+    x: Math.round(x), y: Math.round(r.y - 20), w: Math.round(w), h: 26,
+    rock: r, cutUntil: 0, t: rnd() * 6,
+  });
+}
+
+function brambleAt(px, rect) {
+  for (const b of brambles) {
+    if (gameTime < b.cutUntil) continue;
+    if (rect && b.rock !== rect) continue;
+    if (px >= b.x - 6 && px <= b.x + b.w + 6) return b;
+  }
+  return null;
+}
+
 function generateWorld(seed) {
   worldSeed = seed;
   const rnd = mulberry32(seed);
@@ -231,7 +268,7 @@ function generateWorld(seed) {
   const RI = (a, b) => Math.floor(R(a, b + 1));
 
   rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = []; skyfish = [];
-  thermals = []; runners = []; relics = [];
+  thermals = []; runners = []; relics = []; brambles = []; wreck = null;
 
   const addCliff = (x, y, w, h, type, taper) => {
     const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type, taper: taper || 0 };
@@ -298,6 +335,7 @@ function generateWorld(seed) {
     const hh = R(36, 86);
     const hill = addCliff(hx, groundY - hh, hw, hh, 'granite', 0);
     groundNode(rnd() < 0.5 ? 'fiber' : 'stone', hill.x + hw / 2, hill.y);
+    if (rnd() < 0.45) addBramble(hill, rnd);
     // a second tier you can only reach off the first
     if (rnd() < 0.55) {
       const sw = R(46, 78), sh = R(40, 74);
@@ -312,6 +350,14 @@ function generateWorld(seed) {
   // deliberately no ridgerunner on the start island: the first ten minutes are
   // for learning to move, not for being shoved off a cliff by a boar
 
+  // the wreck you woke up next to: scannable, and worth one search.
+  // Clamp it onto the island — placed blind it can end up off the edge.
+  wreck = {
+    x: Math.round(clamp(CAMP.x - R(40, 90), sx + 45, sx + startW - 45)),
+    y: groundY - 16,
+    searched: false,
+  };
+
   const nTowers = RI(2, 3);
   let launch = { x: CAMP.x, top: groundY };
   for (let i = 0; i < nTowers; i++) {
@@ -319,6 +365,8 @@ function generateWorld(seed) {
     const th = R(240, 420);
     const tx = sx + startW * (0.35 + 0.62 * (i / nTowers)) + R(-25, 25);
     const t = addCliff(tx, groundY - th, tw, th, 'granite', 0);
+    // most practice cliffs are crowned with thorn: the first real gate
+    if (rnd() < 0.8) addBramble(t, rnd);
     ledgeOn(t);
     faceNode(rnd() < 0.55 ? 'fiber' : 'stone', t);
     faceNode(rnd() < 0.55 ? 'stone' : 'fiber', t);
@@ -354,6 +402,7 @@ function generateWorld(seed) {
     const th = R(320, 520);
     const tx = dir > 0 ? x + slabW - tw - R(0, 40) : x + R(0, 40);
     const tower = addCliff(tx, slabTop - th, tw, th, type, 0);
+    if (rnd() < 0.55) addBramble(tower, rnd);
     ledgeOn(tower);
     if (rnd() < 0.6) ledgeOn(slab);
 
@@ -502,6 +551,7 @@ const ITEMS = {
 
 const RECIPES = [
   { id: 'gloves',   tier: 'personal', name: 'Magnetic gloves',   icon: 'gloves',          cost: { fiber: 5, stone: 4 },              desc: 'Climb granite faces.', flag: 'gloves', once: true },
+  { id: 'cutter',   tier: 'personal', name: 'Thorn hook',        icon: 'machete',         cost: { stone: 3, fiber: 2 },              desc: 'Cut thorn off a cliff lip.', flag: 'cutter', once: true },
   { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },                        desc: '+35 food.' },
   { id: 'medkit',   tier: 'personal', name: 'Health kit',        icon: 'first-aid-kit',   cost: { fiber: 3, berry: 2 },              desc: '+45 health.' },
   { id: 'scanner',  tier: 'personal', name: 'Field scanner',     icon: 'radar-sweep',     cost: { crystal: 2, fiber: 3 },            desc: 'Hold the hand on anything new to log it.', flag: 'scanner', once: true },
@@ -531,6 +581,7 @@ const RECIPES = [
 // a wall of grey recipes with a stream of small discoveries.
 const DISCOVERY = {
   gloves:   () => inv.fiber >= 1 && inv.stone >= 1,
+  cutter:   () => sawThorn,
   ration:   () => inv.berry >= 2,
   medkit:   () => inv.fiber >= 2 && player.hp < 95,
   scanner:  () => inv.crystal >= 1,
@@ -556,6 +607,7 @@ const DISCOVERY = {
   beaconkit: () => bases.some(b => b.mk3),
 };
 const touchedRock = {};
+let sawThorn = false;
 
 // Playtest helper: skip the discovery chain entirely.
 function revealAllPlans() {
@@ -598,7 +650,7 @@ function maxFuel() { return flags.jetpack2 ? T.jetFuel2 : flags.jetpack ? T.jetF
 
 const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, egg: 0, skysteel: 0, relic: 0, basekit: 0 };
 const flags = {
-  gloves: false, glider: false, boots: false, pulse: false,
+  gloves: false, glider: false, boots: false, pulse: false, cutter: false,
   battery1: false, battery2: false, spikes: false, magnets: false,
   jetpack: false, jetpack2: false, armor: false, visor: false, thermal: false,
   compass: false, relicbat: false,
@@ -727,10 +779,11 @@ function updateAudio(dt) {
   const cut = 300 + alt * 500 + (storming() ? 700 : 0) + Math.abs(player.vx) * 0.6;
   audio.windGain.gain.value += (target - audio.windGain.gain.value) * clamp(dt * 2, 0, 1);
   audio.windFilter.frequency.value += (cut - audio.windFilter.frequency.value) * clamp(dt * 2, 0, 1);
-  const humTarget = player.state === 'climb' ? (gripKind === 'slick' ? 0.05 : 0.03) : 0;
+  const humTarget = player.state === 'climb' ? (gripKind === 'slick' || gripKind === 'sharp' ? 0.05 : 0.03) : 0;
   audio.humGain.gain.value += (humTarget - audio.humGain.gain.value) * clamp(dt * 6, 0, 1);
   if (player.state === 'climb') {
-    audio.humOsc.frequency.value = gripKind === 'rest' ? 58 : gripKind === 'slick' ? 96 : 74;
+    audio.humOsc.frequency.value = gripKind === 'rest' ? 58
+      : gripKind === 'slick' ? 96 : gripKind === 'sharp' ? 112 : 74;
   }
 }
 
@@ -926,6 +979,7 @@ function faceAt(px, py) {
 function canClimb(r) { return CLIFF_TYPES[r.type].tier <= gloveTier(); }
 
 let gripToastAt = -99;
+let brambleToastAt = -99;
 function gripFeedback(r) {
   // Learning what a rock is happens on contact, not on the throttled message.
   if (flags.gloves && !touchedRock[r.type]) {
@@ -1118,19 +1172,37 @@ function updatePlayer(dt) {
     player.energy -= drain * dt;
     if (player.energy <= 0) { player.energy = 0; detach(false); return; }
 
-    // mantle over the top
+    // razor shale opens your hands up while you hold it
+    if (feat && FEATURES[feat.kind].dps) {
+      bleed(FEATURES[feat.kind].dps * dt, 'Bled out on razor shale');
+      if (!feat.warned) { feat.warned = true; toast('Razor shale — it cuts', 'bad', 'razor-blade'); }
+    }
+
+    // mantle over the top — unless the lip is choked with thorn
     if (input.y < -0.1 && player.y + P_H + input.y * T.climbSpeed * climbBoost * dt <= r.y + 10) {
-      player.y = r.y - P_H;
-      player.state = 'ground'; player.climbRect = null;
-      player.vy = 0;
-      return;
+      const thorn = brambleAt(player.x + P_W / 2, r);
+      if (thorn) {
+        if (!sawThorn) { sawThorn = true; checkDiscoveries(); }
+        player.y = r.y + 12 - P_H + 6; // held just under the lip
+        if (gameTime - brambleToastAt > 5) {
+          brambleToastAt = gameTime;
+          toast(flags.cutter ? 'Thorn — hold the hand to cut' : 'Thorn blocks the top', 'bad', 'thorny-vine');
+        }
+      } else {
+        player.y = r.y - P_H;
+        player.state = 'ground'; player.climbRect = null;
+        player.vy = 0;
+        return;
+      }
     }
 
     player.x += input.x * T.climbSpeedX * climbBoost * dt;
     const cx = player.x + P_W / 2;
     if (cx < r.x - 4 || cx > r.x + r.w + 4) { detach(false); return; } // slid off the side
 
-    const landed = moveY(input.y * T.climbSpeed * climbBoost * dt);
+    // slick rock will not hold you still: you slide while you are on it
+    const slide = feat && FEATURES[feat.kind].slide ? FEATURES[feat.kind].slide : 0;
+    const landed = moveY(input.y * T.climbSpeed * climbBoost * dt + slide * dt);
     if (landed) { player.state = 'ground'; player.climbRect = null; return; }
     if (player.y > r.y + r.h) { detach(false); return; } // off the bottom
 
@@ -1307,6 +1379,16 @@ function updateVitals(dt) {
   if (player.y > WORLD.kill) die('You fell into the cloud sea');
 }
 
+// Continuous environmental damage: no invulnerability window (it would make a
+// per-second effect meaningless) but armour still counts.
+function bleed(dmg, cause) {
+  if (deathCause) return;
+  if (flags.stormsuit) dmg *= 0.4;
+  else if (flags.armor) dmg *= (1 - T.armorSoak);
+  player.hp -= dmg;
+  if (player.hp <= 0) die(cause || 'The rock took you');
+}
+
 function hurtStarve(dmg) {
   if (deathCause) return;
   player.hp -= dmg;
@@ -1337,7 +1419,13 @@ function scanTarget() {
   for (const b of razorbeaks) if (near(b.x, b.y, 170)) return 'nightwing';
   for (const rr of runners) if (near(rr.x, rr.rock.y - 18, 150)) return 'runner';
   for (const rl of relics) if (near(rl.x, rl.y, 120)) return 'relic';
+  // thorn is worth logging once, then it stops hijacking the scanner
+  if (!scanned.bramble && nearestBramble()) return 'bramble';
   if (inThermal()) return 'thermal';
+  if (player.climbRect) {
+    const f = featureAt(player.climbRect, player.x + P_W / 2, player.y + P_H / 2);
+    if (f && f.kind === 'sharp') return 'sharp';
+  }
   const n = nearestNode();
   if (n && n.type === 'skysteel') return 'skysteel';
   const r = player.climbRect || faceAt(px, py) || standingOn();
@@ -1370,6 +1458,22 @@ function nearestNest() {
     if (w.eggs > 0 && gameTime > (w.eggBack || 0) && dist(px, py, w.nest.x, w.nest.y) < 58) return w;
   }
   return null;
+}
+
+// Thorn you can reach: cutting needs the hook, and pays back fiber.
+function nearestBramble() {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  for (const b of brambles) {
+    if (gameTime < b.cutUntil) continue;
+    if (px > b.x - 26 && px < b.x + b.w + 26 && py > b.y - 46 && py < b.y + b.h + 60) return b;
+  }
+  return null;
+}
+
+function nearestWreck() {
+  if (!wreck || wreck.searched) return null;
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  return dist(px, py, wreck.x, wreck.y) < 62 ? wreck : null;
 }
 
 function nearestRelic() {
@@ -1433,9 +1537,14 @@ function updateInteraction(dt) {
     else critter = null;
   }
   const relic = nearestRelic();
-  const nest = relic ? null : nearestNest();
-  const scan = (relic || nest) ? null : unscannedTarget();
-  if (relic || nest) { node = null; critter = null; }
+  const wr = relic ? null : nearestWreck();
+  // Thorn only claims the hand when you can do something about it, otherwise it
+  // would block scanning and harvesting for the whole early game.
+  const thornNear = (relic || wr) ? null : nearestBramble();
+  const thorn = flags.cutter ? thornNear : null;
+  const nest = (relic || wr || thorn) ? null : nearestNest();
+  const scan = (relic || nest || wr || thorn) ? null : unscannedTarget();
+  if (relic || nest || wr || thorn) { node = null; critter = null; }
   if (scan) { node = null; critter = null; } // logging something new comes first
 
   // a tap of the hand doubles as the pulse when something is on you
@@ -1452,6 +1561,30 @@ function updateInteraction(dt) {
       inv.relic += 1;
       checkDiscoveries();
       toast('Relic recovered — and a cache of supplies', 'good', 'emerald');
+      saveGame();
+    }
+  } else if (input.interactHeld && wr) {
+    if (!player.harvest || player.harvest.wreck !== wr) player.harvest = { wreck: wr, t: 0, total: T.captureTime };
+    player.harvest.t += dt;
+    if (player.harvest.t >= T.captureTime) {
+      wr.searched = true;
+      player.harvest = null;
+      inv.fiber += 3; inv.stone += 3; inv.berry += 2;
+      toast('Searched the wreck — supplies salvaged', 'good', 'sinking-ship');
+      sfx('harvest');
+      checkDiscoveries();
+      saveGame();
+    }
+  } else if (input.interactHeld && thorn) {
+    if (!player.harvest || player.harvest.thorn !== thorn) player.harvest = { thorn, t: 0, total: T.brambleCut };
+    player.harvest.t += dt;
+    if (player.harvest.t >= T.brambleCut) {
+      thorn.cutUntil = gameTime + T.brambleRegrow;
+      player.harvest = null;
+      inv.fiber += 2;
+      toast('Cut through — +2 fiber', 'good', 'machete');
+      sfx('harvest');
+      checkDiscoveries();
       saveGame();
     }
   } else if (input.interactHeld && nest) {
@@ -1506,6 +1639,10 @@ function updateInteraction(dt) {
     if (input.interactHeld && !node) {
       const b = nearestBase();
       if (b && !player._baseTapLatch) { player._baseTapLatch = true; openBase(b); }
+      else if (!b && thornNear && !flags.cutter && gameTime - brambleToastAt > 5) {
+        brambleToastAt = gameTime;
+        toast('Bare hands will not cut thorn', 'bad', 'thorny-vine');
+      }
     }
     player.harvest = null;
   }
@@ -1514,7 +1651,7 @@ function updateInteraction(dt) {
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
   const prog = player.harvest ? player.harvest.t / player.harvest.total : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
-  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic || !!nest || !!scan);
+  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic || !!nest || !!scan || !!wr || !!thorn);
   btnInteract.classList.toggle('scanning', !!scan && !relic && !nest);
   btnBase.classList.toggle('hidden', !nearestBase());
   btnJet.classList.toggle('hidden', !flags.jetpack);
@@ -1758,6 +1895,7 @@ function craft(recipe, base) {
   if (recipe.id === 'jetpack2') { flags.jetpack2 = true; player.fuel = maxFuel(); toast('Ripwing jets — bigger tank', 'good', 'thrust'); }
   if (recipe.id === 'visor') { flags.visor = true; toast('Range visor — tap to look far', 'good', 'binoculars'); }
   if (recipe.id === 'thermal') { flags.thermal = true; toast('Thermal wing — ride the updrafts', 'good', 'windy-stripes'); }
+  if (recipe.id === 'cutter') { flags.cutter = true; toast('Thorn hook — the tops are open now', 'good', 'machete'); }
   if (recipe.id === 'scanner') { flags.scanner = true; toast('Scanner online — hold the hand on anything new', 'good', 'radar-sweep'); }
   if (recipe.id === 'mk3') { if (base) base.mk3 = true; flags.mk3 = true; toast('Fabricator Mk3 online', 'good', 'anvil'); }
   if (recipe.id === 'stormsuit') { flags.stormsuit = true; toast('Storm suit — lightning cannot reach you', 'good', 'chest-armor'); }
@@ -1897,6 +2035,9 @@ function saveGame() {
         energy: player.energy, maxEnergy: player.maxEnergy, fuel: player.fuel,
       },
       relics: relics.map(r => !!r.taken),
+      brambles: brambles.map(b => Math.max(0, b.cutUntil - gameTime)),
+      wreck: wreck ? !!wreck.searched : false,
+      sawThorn,
       dayTime, stormTimer, stormLeft, scanned, beaconLit, runStats,
       known, touchedRock, seen: [...seenCells], audioOn: audio.on,
       nests: stingwings.map(w => ({ e: w.eggs, b: Math.max(0, (w.eggBack || 0) - gameTime) })),
@@ -1936,6 +2077,9 @@ function loadGame() {
   deaths = data.deaths || 0;
   if (data.nodes) NODES.forEach((n, i) => { n.depletedUntil = gameTime + (data.nodes[i] || 0); });
   if (data.relics) relics.forEach((r, i) => { r.taken = !!data.relics[i]; });
+  if (data.brambles) brambles.forEach((b, i) => { b.cutUntil = gameTime + (data.brambles[i] || 0); });
+  if (wreck) wreck.searched = !!data.wreck;
+  sawThorn = !!data.sawThorn;
   if (typeof data.dayTime === 'number') dayTime = data.dayTime;
   if (typeof data.stormTimer === 'number') stormTimer = data.stormTimer;
   stormLeft = data.stormLeft || 0;
@@ -2468,28 +2612,42 @@ function drawCliff(r) {
   if (r.features) {
     for (const f of r.features) {
       const broken = f.kind === 'crumble' && gameTime < f.brokenUntil;
-      const def = FEATURES[broken ? 'slick' : f.kind];
+      const kind = broken ? 'slick' : f.kind;
+      const fd = FEATURES[kind];
+      // the patch itself is the rock's own colour nudged toward the feature tint
+      const body = mixHex(def.color, fd.tint, broken ? fd.mix * 0.5 : fd.mix);
+      const line = mixHex(def.color, fd.tint, Math.min(1, fd.mix + 0.42));
       ctx.save();
-      ctx.globalAlpha = broken ? 0.3 : 0.42;
-      ctx.fillStyle = def.color;
+      ctx.fillStyle = body;
       ctx.fillRect(f.x, f.y, f.w, f.h);
-      ctx.globalAlpha = broken ? 0.45 : 0.85;
-      ctx.strokeStyle = def.color;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(f.x + 1, f.y + 1, f.w - 2, f.h - 2);
+      ctx.globalAlpha = broken ? 0.4 : 0.8;
+      ctx.strokeStyle = line;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(f.x + 0.75, f.y + 0.75, f.w - 1.5, f.h - 1.5);
       ctx.restore();
-      // texture that reads without colour: notches, rungs, cracks, streaks
+      // the pattern, not the colour, is what identifies a patch at a glance
       ctx.save();
-      ctx.globalAlpha = 0.75;
-      ctx.fillStyle = def.color;
-      if (f.kind === 'hold' && !broken) {
+      ctx.globalAlpha = broken ? 0.5 : 0.95;
+      ctx.fillStyle = line;
+      if (kind === 'hold') {
         for (let i = 6; i < f.w - 6; i += 15) for (let j = 8; j < f.h - 6; j += 16) ctx.fillRect(f.x + i, f.y + j, 6, 4);
-      } else if (f.kind === 'rest') {
-        ctx.fillRect(f.x + 2, f.y + f.h - 4, f.w - 4, 3);
-      } else if (f.kind === 'crumble' && !broken) {
+      } else if (kind === 'rest') {
+        ctx.fillRect(f.x + 2, f.y + f.h - 5, f.w - 4, 3);
+        for (let i = 5; i < f.w - 5; i += 13) ctx.fillRect(f.x + i, f.y + f.h - 11, 3, 6);
+      } else if (kind === 'crumble') {
         for (let i = 8; i < f.w - 4; i += 19) ctx.fillRect(f.x + i, f.y + 5, 2, f.h - 12);
+      } else if (kind === 'sharp') {
+        // upward teeth: unmistakable even at visor range
+        for (let i = 4; i < f.w - 8; i += 12) {
+          ctx.beginPath();
+          ctx.moveTo(f.x + i, f.y + f.h - 4);
+          ctx.lineTo(f.x + i + 5, f.y + f.h - 15);
+          ctx.lineTo(f.x + i + 10, f.y + f.h - 4);
+          ctx.closePath(); ctx.fill();
+        }
+        for (let j = 10; j < f.h - 18; j += 15) ctx.fillRect(f.x + 6, f.y + j, f.w - 12, 1.5);
       } else {
-        for (let j = 8; j < f.h - 4; j += 13) ctx.fillRect(f.x + 5, f.y + j, f.w - 10, 2);
+        for (let j = 8; j < f.h - 4; j += 11) ctx.fillRect(f.x + 5, f.y + j, f.w - 10, 1.5);
       }
       ctx.restore();
     }
@@ -2551,6 +2709,58 @@ function render() {
   }
 
   for (const r of rocks) drawCliff(r);
+
+  // thorn along the lips, and the wreck you woke beside
+  for (const b of brambles) {
+    if (gameTime < b.cutUntil) {
+      // cut stubble, so a cleared lip still reads as having been thorned
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#4a6a44';
+      for (let i = 3; i < b.w - 3; i += 9) ctx.fillRect(b.x + i, b.y + b.h - 5, 3, 5);
+      ctx.restore();
+      continue;
+    }
+    ctx.save();
+    ctx.fillStyle = '#2f4a2c';
+    ctx.fillRect(b.x, b.y + 4, b.w, b.h - 4);
+    ctx.strokeStyle = '#6f9c5e';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < b.w; i += 11) {
+      const sway = Math.sin(gameTime * 1.3 + i * 0.4 + b.t) * 2.5;
+      ctx.beginPath();
+      ctx.moveTo(b.x + i, b.y + b.h);
+      ctx.lineTo(b.x + i + 4 + sway, b.y - 6);
+      ctx.stroke();
+    }
+    ctx.restore();
+    for (let i = 8; i < b.w - 6; i += 26) {
+      drawIcon(ctx, 'thorny-vine', b.x + i + 8, b.y + 6, 22, '#8fbf72', 0.95);
+    }
+    if (player.harvest && player.harvest.thorn === b) {
+      ctx.strokeStyle = '#c9f58f'; ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.y + 6, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (player.harvest.t / player.harvest.total));
+      ctx.stroke();
+    }
+  }
+
+  if (wreck) {
+    drawIcon(ctx, 'sinking-ship', wreck.x, wreck.y, 40, wreck.searched ? '#5a6478' : '#b9a07a', wreck.searched ? 0.5 : 0.95);
+    if (!wreck.searched) {
+      ctx.save();
+      ctx.globalAlpha = 0.25 + Math.sin(gameTime * 2.2) * 0.1;
+      ctx.strokeStyle = '#ffd76b'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(wreck.x, wreck.y, 30, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    if (player.harvest && player.harvest.wreck === wreck) {
+      ctx.strokeStyle = '#ffd76b'; ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(wreck.x, wreck.y, 28, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (player.harvest.t / player.harvest.total));
+      ctx.stroke();
+    }
+  }
 
   // ridgerunners patrol island tops
   for (const rr of runners) {
@@ -2903,7 +3113,7 @@ function drawPlayer() {
   ctx.beginPath(); ctx.arc(cx, py + 8, 8, 0, Math.PI * 2); ctx.fill();
 
   const glow = player.state === 'climb';
-  const gripCol = glow && gripKind ? FEATURES[gripKind].color : '#59d7ff';
+  const gripCol = glow && gripKind ? FEATURES[gripKind].tint : '#59d7ff';
   ctx.fillStyle = glow ? gripCol : '#94a8cf';
   if (glow) {
     // both hands up on the face in front
@@ -3015,7 +3225,7 @@ document.getElementById('btn-sound').innerHTML = svgIcon(audio.on ? 'sound-on' :
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Reading the Rock', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Thorn and Shale', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -3037,6 +3247,8 @@ window.SKYREACH = {
   get thermals() { return thermals; },
   get runners() { return runners; },
   get relics() { return relics; },
+  get brambles() { return brambles; },
+  get wreck() { return wreck; },
   get jetOn() { return jetOn; },
   get dayTime() { return dayTime; }, set dayTime(v) { dayTime = v; },
   get storming() { return stormLeft > 0; },
@@ -3047,6 +3259,10 @@ window.SKYREACH = {
   get seenCells() { return seenCells; },
   get audio() { return audio; },
   get gripKind() { return gripKind; },
+  get features() { return FEATURES; },
+  get cliffTypes() { return CLIFF_TYPES; },
+  get codexKeys() { return CODEX_KEYS; },
+  mixHex,
   get cam() { return cam; },
   checkDiscoveries, renderMap, featureAt, toggleAudio, resetGame, revealAllPlans,
   inThermal,

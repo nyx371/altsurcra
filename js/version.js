@@ -1,8 +1,22 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.9.0';
+const GAME_VERSION = '0.10.0';
 
 const CHANGELOG = [
+  {
+    version: '0.10.0',
+    name: 'Thorn and Shale',
+    date: '2026-07-26',
+    notes: [
+      'Cliff patches are now tinted from the rock they sit on — subtle, but the patterns still read at a glance',
+      'Razor shale: holds your weight and cuts you while you hang on it',
+      'Slick rock is properly slippery — you slide down it instead of just paying more',
+      'Thorn grows across cliff lips and blocks you from topping out until it is cut',
+      'Thorn hook (3 stone, 2 fiber): the first tool, and the first real goal before the glider',
+      'A wrecked expedition sits beside camp — search it once for supplies, scan it for the log',
+      'Cut thorn pays fiber and grows back in time',
+    ],
+  },
   {
     version: '0.9.0',
     name: 'Reading the Rock',

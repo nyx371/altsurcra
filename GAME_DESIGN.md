@@ -66,12 +66,17 @@ Water/thirst is deliberately **not** in scope for now (one survival clock — fo
 
 Faces are no longer uniform. Every climbable face generates non-overlapping bands of:
 
-| Feature | Cost | Reads as |
+| Feature | What it does | Reads as |
 |---|---|---|
-| **Handholds** | 0.45× energy | green, notched |
-| **Rest ledge** | **zero** drain, even hanging | blue rung |
-| **Slick rock** | 2.1× energy | red streaks |
-| **Crumbling** | 1× — but takes your weight for only ~1.6s before it breaks and drops you | orange cracks (heals after ~26s) |
+| **Handholds** | 0.45× energy | notched dots |
+| **Rest ledge** | **zero** drain, even hanging still | a rung with uprights |
+| **Slick rock** | 1.35× energy **and you slide down it** (~62px/s) — it will not hold you still | fine horizontal streaks |
+| **Razor shale** | 1.15× energy **and it cuts you** (~7hp/s while gripped; armour blunts it) | upward teeth |
+| **Crumbling** | takes your weight for only ~1.6s, then breaks and drops you | vertical cracks (heals after ~26s) |
+
+**Colour [v0.10].** Each patch is drawn as the *host rock's own colour* nudged ~30% toward a feature tint, not painted on top of it. Patches read as part of the cliff rather than stickers, and the **pattern** does the identifying — teeth for shale, streaks for slick, cracks for crumbling — so they stay legible at visor range and for colour-blind players.
+
+**Why five and not three.** Slick and razor shale used to be one red band that only cost more energy, which meant it communicated nothing: it looked dangerous and merely felt expensive. Splitting it gives two failure modes that read differently in play — slick *takes position away from you* (you can cross it, you cannot linger or rest), and shale *takes health*, which is the first climbing hazard that a full energy bar cannot solve.
 
 This is the change the whole game was waiting for. Before it, a cliff was a rectangle you held *up* against while a bar drained — there was no route to read, which meant the visor, the cheap idle hang and the ascender were all serving a decision the player never actually made. Now a face has a *good line and a bad line*: string handholds and ledges together and a climb is cheap; cut straight up through slick rock and you arrive with nothing left. Crumbling rock adds a timing beat — you can cross it, you just can't rest on it. Harder rock types get meaner mixes, so tier also changes *texture*, not just permission.
 
@@ -187,7 +192,7 @@ Base (at a placed base, with Mk2 built):
 ### 6.4 Progression skeleton
 
 Reach is gated by grip, energy ceiling and air tech, not by artificial walls:
-`bare hands (hills only) → Magnetic gloves → Glider → Spring boots → Field scanner → Range visor → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
+`bare hands (hills only) → search the wreck → Thorn hook → Magnetic gloves → Glider → Spring boots → Field scanner → Range visor → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
 
 Three separate ways to gain height now exist and they cost different things: **climbing** spends glove energy, the **jetpack** spends its own fuel, and **thermals** cost nothing but require you to be in the right place. That spread is deliberate — it keeps "how do I get up there?" an interesting question at every tier.
 
@@ -209,6 +214,18 @@ The pack carries a **Playtest** row: +20 materials, +3 base kits, unlock all gea
 - Later: beds (time skip?), farming planters on the wall, beacons visible from far islands, modular expansion like Subnautica corridors — but hanging.
 
 **Why this is the heart of the game.** A cliff base turns a one-shot energy budget into a staged expedition: climb, bolt in, stash, recharge, climb again. It's the sky equivalent of dropping a Seabase halfway down a trench, and it's what makes the higher bands survivable without simply inflating the battery.
+
+## 7⅛. The first hour **[v0.10]**
+
+Before the glider there is now a real arc rather than a gathering chore:
+
+1. **The wreck.** You wake beside a crashed expedition. Searching it once pays fiber, stone and berries — enough to want the gloves — and it is scannable for the log. It is the game's only piece of authored backstory placed where you cannot miss it.
+2. **Hop the hills.** Low rock teaches height-as-reward with just the jump button.
+3. **Thorn.** Most practice cliffs are crowned with it. You can climb the face, but you *cannot mantle the top* — you hang under the lip and the game tells you what is in the way. This is the first real obstacle, and it appears before you own anything that can solve it.
+4. **The Thorn hook** (3 stone, 2 fiber) is revealed by bumping into thorn. It is the first *tool* — not a movement upgrade, not a survival item — and cutting through pays fiber back, so the solution to the obstacle is also a resource loop. Thorn regrows in ~4 minutes, which keeps a cleared route clear long enough to use and makes it renewable.
+5. **The gloves, then the cliffs proper.**
+
+The point is that "climb to the top of that" stops being automatic. It becomes a goal with a prerequisite you can see from the ground, which is exactly the shape of a Subnautica gate — the wall is not higher, you are just not equipped yet.
 
 ## 7¼. Plans, not a checklist **[v0.9]**
 
@@ -298,7 +315,8 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.7 — Wayfarer** *(current build)*: outposts and relics rewarding horizontal travel, world bounds that follow generation, jetpack as a toggle, fixed button grid, vitals above menus.
 - **0.8 — Long Night** *(current build)*: day/night cycle, storms with wind and lightning, sleeping at bases, field scanner and 11-entry log, nest robbing, skysteel, Fabricator Mk3, Storm suit, Ascender rig, and the Signal beacon ending.
 - **0.9 — Reading the Rock** *(current build)*: route features on every face, the sky chart with fog of war, discovery-gated recipes, procedural audio, camera look-ahead, a far wider visor, and no ridgerunner on the start island.
-- **0.10 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **0.10 — Thorn and Shale** *(current build)*: rock-blended feature colours, razor shale that cuts, genuinely slippery slick rock, thorn gating cliff tops, the Thorn hook, and a searchable wreck at camp.
+- **0.11 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
 - **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions
