@@ -115,15 +115,21 @@ The gate is at *grab time*: unclimbable rock simply refuses your hands (one shor
 
 ### 4.4 Harvesting **[v0.1]**
 
-Resource nodes grow on cliff faces and ledges. Harvesting takes ~1 second holding the interact button. Harvesting **while hanging on a wall costs a chunk of glove energy** — reaching out one-handed is expensive. Ledge nodes are free to harvest. Nodes respawn after a few minutes.
+Resource nodes grow on cliff faces and ledges. Harvesting takes ~1 second holding the interact button. Harvesting **while hanging on a wall costs a chunk of glove energy** — reaching out one-handed is expensive. Ledge nodes are free to harvest.
 
 This makes "which nodes do I take on this energy budget" the moment-to-moment decision on a climb.
+
+**Nodes are finite [v0.11].** What you strip off the rock is gone for good. Respawning nodes made every island interchangeable — one patch of wall was as good as any other, and the correct play was always to farm the nearest one. With a fixed stock, a stripped island is *used up*, which is what pushes you outward and upward, and a node you walk past is a decision instead of a delay. Yields went up (2 → 3, skysteel 1 → 2) to match: a node is now a find, not a tick.
+
+Two things stop this becoming a dead end. Generation guarantees a floor of every material — comfortably more than the whole tech tree costs — and the renewable half of the economy moves to **base planters** (7⅔) and to livestock, which still respawn. Cut thorn also pays fiber and regrows, and **Lizard ration** turns respawning livestock into food, so the survival loop can never run out even on a world you have picked clean.
 
 ## 5. World
 
 ### 5.1 Structure
 
 A vertical archipelago of floating islands in loose **altitude bands**. Higher bands = richer materials, harsher threats, and (later) environmental hazards. Islands within a band are reachable by gliding; moving *up* a band always requires climbing something.
+
+**Island scale [v0.11].** Islands roughly doubled in width. The old ones read as platforms — you could see both edges at once, so an island was a waypoint rather than a place. At the new size the start island alone carries five to seven hills, three or four practice cliffs and a wreck, and wide islands in the chain grow a **second spire** at the far end so there is more than one thing on them worth climbing. Gaps between islands were left alone: glide range is a tuned quantity and the point was to make the rock bigger, not the sky wider.
 
 **Going sideways [v0.7].** The chain climbs, but **outposts** generate far out to the left and right of it at easy altitudes — three or four per world, hundreds of metres past the last island of the main chain. Each carries a dense node cluster, wildlife, a ridgerunner, a return thermal so it is never a one-way trip, and a **sealed relic**.
 
@@ -179,12 +185,15 @@ Personal fabricator:
 | Glider | 4 fiber, 2 stone | Unlocks gliding |
 | Glove battery Mk1 | 2 ore, 2 crystal | Max energy 100 → 150 |
 | Base kit | 6 stone, 4 fiber | Placeable base platform |
+| Lizard ration **[v0.11]** | 1 cliff lizard | Food +35, from a source that respawns |
 
 Base (at a placed base, with Mk2 built):
 
 | Recipe | Cost | Effect |
 |---|---|---|
 | Fabricator Mk2 | 3 ore, 2 crystal | Unlocks base crafting at that base |
+| Planter box **[v0.11]** | 5 stone, 4 fiber | A growing bed at this base (max 4) |
+| Zipline kit **[v0.11]** | 4 ore, 2 crystal, 4 fiber | A motorised two-way cable between two anchors (Mk2) |
 | Glove battery Mk2 | 4 ore, 4 crystal | Max energy → 220 *(teased, craftable in v0.1)* |
 | Thermal wing [later] | TBD | Glider gains rising-air lift |
 | Grapple bolt [later] | TBD | One instant wall-attach from mid-air |
@@ -192,7 +201,7 @@ Base (at a placed base, with Mk2 built):
 ### 6.4 Progression skeleton
 
 Reach is gated by grip, energy ceiling and air tech, not by artificial walls:
-`bare hands (hills only) → search the wreck → Thorn hook → Magnetic gloves → Glider → Spring boots → Field scanner → Range visor → Battery Mk1 → first base + Mk2 → Grip spikes (basalt) → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
+`bare hands (hills only) → search the wreck → Thorn hook → Magnetic gloves → Glider → Spring boots → Field scanner → Range visor → Battery Mk1 → first base + planters → Mk2 → Grip spikes (basalt) → Zipline kit → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
 
 Three separate ways to gain height now exist and they cost different things: **climbing** spends glove energy, the **jetpack** spends its own fuel, and **thermals** cost nothing but require you to be in the right place. That spread is deliberate — it keeps "how do I get up there?" an interesting question at every tier.
 
@@ -204,14 +213,14 @@ A cheap craftable that toggles the camera **half-scale**, showing the island cha
 
 ### 6.5 Playtest cheats **[v0.4]**
 
-The pack carries a **Playtest** row: +20 materials, +3 base kits, unlock all gear, refill vitals. Restart-and-remix sits at the top of the changelog panel. These are deliberately in the shipped build — this is a design tool as much as a game right now, and being able to jump straight to "what does storm rock feel like with Mk2" beats replaying the opening every time. They come out (or go behind a tap-the-version-five-times gesture) when we start showing it to fresh players.
+The pack carries a **Playtest** row: +20 materials, +3 base kits, +3 zipline kits, restore all stripped resources, unlock all gear, refill vitals. Restart-and-remix sits at the top of the changelog panel. These are deliberately in the shipped build — this is a design tool as much as a game right now, and being able to jump straight to "what does storm rock feel like with Mk2" beats replaying the opening every time. They come out (or go behind a tap-the-version-five-times gesture) when we start showing it to fresh players.
 
 ## 7. Bases **[v0.2]**
 
 - A **base kit** places a small platform on flat ground **or bolts straight onto a cliff face** while you're hanging there. Cliff-side bases are the signature move: a wall base extends a **deck you can stand on**, converting any blank rock face into a rest stop, recharge point and supply dump.
 - A base provides: **fast energy recharge** in its radius, **storage**, a **respawn point**, and a socket to build a **Fabricator Mk2**.
 - Bases in range get their own on-screen button rather than sharing the harvest button — standing on a resource node must never hide your own front door.
-- Later: beds (time skip?), farming planters on the wall, beacons visible from far islands, modular expansion like Subnautica corridors — but hanging.
+- Later: beacons visible from far islands, modular expansion like Subnautica corridors — but hanging.
 
 **Why this is the heart of the game.** A cliff base turns a one-shot energy budget into a staged expedition: climb, bolt in, stash, recharge, climb again. It's the sky equivalent of dropping a Seabase halfway down a trench, and it's what makes the higher bands survivable without simply inflating the battery.
 
@@ -221,11 +230,27 @@ Before the glider there is now a real arc rather than a gathering chore:
 
 1. **The wreck.** You wake beside a crashed expedition. Searching it once pays fiber, stone and berries — enough to want the gloves — and it is scannable for the log. It is the game's only piece of authored backstory placed where you cannot miss it.
 2. **Hop the hills.** Low rock teaches height-as-reward with just the jump button.
-3. **Thorn.** Most practice cliffs are crowned with it. You can climb the face, but you *cannot mantle the top* — you hang under the lip and the game tells you what is in the way. This is the first real obstacle, and it appears before you own anything that can solve it.
+3. **Thorn.** Some practice cliffs are crowned with it — but never the first one you meet [v0.11], so you learn to top out before you meet the thing that stops you topping out. You can climb the face, but you *cannot mantle the top* — you hang under the lip and the game tells you what is in the way. This is the first real obstacle, and it appears before you own anything that can solve it.
 4. **The Thorn hook** (3 stone, 2 fiber) is revealed by bumping into thorn. It is the first *tool* — not a movement upgrade, not a survival item — and cutting through pays fiber back, so the solution to the obstacle is also a resource loop. Thorn regrows in ~4 minutes, which keeps a cleared route clear long enough to use and makes it renewable.
 5. **The gloves, then the cliffs proper.**
 
 The point is that "climb to the top of that" stops being automatic. It becomes a goal with a prerequisite you can see from the ground, which is exactly the shape of a Subnautica gate — the wall is not higher, you are just not equipped yet.
+
+## 7⅔. Planters — the only thing that grows back **[v0.11]**
+
+A **Planter box** (5 stone, 4 fiber) is built at a base, up to four per base. Each bed takes one seed — a skyberry or a fiber — and returns three of the same after ~105 seconds. Net +2 per cycle, which is deliberately unspectacular: a planter is not a way to get rich, it is a way to *not run out*.
+
+This exists because making nodes finite (4.4) removed the game's only renewable material source, and a survival game with a strictly decreasing supply of food is a countdown, not a loop. Putting the regrowth at a base — and only at a base — means the answer to "I am running low" is *go home*, which is the sentence a base-building game wants you to say. It also gives the first base a job on day one, well before you can afford a Mk2, and it turns a berry you were about to eat into a decision.
+
+Seeds come from your pack **or** that base's own chest, matching the pooled-stock rule (6.2), so a base you have been depositing into can be replanted without unpacking anything.
+
+## 7¾bis. Ziplines **[v0.11]**
+
+A **Zipline kit** (4 ore, 2 crystal, 4 fiber, Mk2 tier) strings a **motorised cable between two points you choose**. Placement is two acts: drop an anchor, travel to the far end, drop the second. The kit is only spent when the cable actually connects, and an unfinished anchor is drawn as a dashed line to your hands — green while the far end would still be in reach, red past it. Runs are capped at ~1050px.
+
+The trolley is **powered, not gravity-fed**, and that is the whole design. A gravity zipline is a one-way slide you can only build downhill, which is a glider with extra steps; a motor makes the cable a *route* — it carries you uphill, and pushing the stick along the line reverses direction mid-span. You can catch a cable anywhere along its length, not only at the ends, so it doubles as a rescue line under a face you keep falling off.
+
+It is Mk2-gated on purpose. Traversal you built yourself is the reward for having established a base, and by the time you own one the world is large enough (5.1) that commuting is a real cost worth engineering away.
 
 ## 7¼. Plans, not a checklist **[v0.9]**
 
@@ -268,6 +293,10 @@ Threat design rule: threats attack your *position and energy*, not just your hea
 
 It never leaves its own island, so a charge is survivable if you read the ground and give yourself room, and it's the first threat that makes *where you stand* matter on flat terrain rather than on a wall. Counterplay: jump it, out-walk the cooldown, hop onto a hill it can't reach you on, or pulse it.
 
+**Feeding one [v0.11].** Hold the hand button near a ridgerunner while carrying a skyberry or a ration and it takes the food and stops charging — permanently, and across saves. A tamed runner trots after you on its island and is drawn in green with a marker over it.
+
+This is the only threat in the game with a *non-violent* answer, and it should stay that way. Everything else you deal with by routing around it or blasting it; the boar is the one that can be talked down, which costs you a food item at exactly the moment food is scarce (4.4) and makes the choice mean something. It also converts the most annoying threat in the game into a small companionship beat — a boar following you around an island you have stripped bare is doing more work for the mood of the place than another charge would.
+
 ### 8.1½ Neutral life — and livestock **[v0.5]**
 
 The wall is a biome, so most of what lives there shouldn't want to kill you. Both neutral species are **catchable, respawning livestock** and both are crafting inputs, which turns wildlife from scenery into a renewable resource layer:
@@ -275,7 +304,7 @@ The wall is a biome, so most of what lives there shouldn't want to kill you. Bot
 - **Cliff lizards** (gecko icon): live on the faces and skitter away when you get close. Caught by **holding the hand button** while you grip the wall next to one. They flee from *inside* your reach radius, so a committed grab lands but a lazy one doesn't — and once your hand is on one it stops struggling. Scales go into **Spring boots** and **Scale armor**.
 - **Sky trout** (flying-trout icon): drift in the open air between islands. You cannot hover next to one, so hold-to-catch would be impossible — instead you **catch them by flying through them**, which makes a glide across a gap into a fishing run. A faint halo shows the catch radius. They go into **Jetpack**, **Ripwing jets** and **Resonant magnets**.
 
-Both respawn on a timer (90s) at their home spot, so a patch of wall or sky is a farm you come back to rather than a resource you strip.
+Both respawn on a timer (90s) at their home spot, so a patch of wall or sky is a farm you come back to rather than a resource you strip. Since v0.11 they are one of only two things in the world that come back — the other being planters — which quietly promoted them from flavour to the backbone of the food economy.
 
 **Design note:** capture is the first mechanic that rewards *stopping* on a wall rather than racing up it, which is exactly the behaviour the cheap idle-hang cost (4.1) was meant to enable.
 
@@ -286,7 +315,7 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 ## 9. Controls (mobile) **[v0.1, layout fixed in v0.7]**
 
 - **Left thumb:** virtual joystick — walk, steer climbs, steer glides.
-- **Right thumb:** a **fixed 3x3 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot), **Jump/Glide**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
+- **Right thumb:** a **fixed 3x3 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot/feed), **Jump/Glide**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left, and the **cable** button (mount/drop a zipline) top-centre. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
 - **Vital bars sit above the menus [v0.7]**, with a dark backing while one is open — you decide what to eat or craft *because* of what your health and energy say, so hiding them behind the pack was backwards.
 - Keyboard supported for desktop playtesting: WASD/arrows, Space (jump/hold to glide), E (interact), C (pack).
 - Portrait and landscape both work; canvas scales to viewport.
@@ -306,17 +335,18 @@ Everything is synthesised with WebAudio — no asset loads, which keeps the whol
 
 Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each version ships with in-game changelog notes. Rough roadmap:
 
-- **0.1 — First Climb** *(this build)*: core movement (walk/climb/glide), energy, vitals, harvest, personal fabricator, 4 recipes, base kit + Mk2 teaser, 2 threats, 2 islands, version/changelog UI.
+- **0.1 — First Climb**: core movement (walk/climb/glide), energy, vitals, harvest, personal fabricator, 4 recipes, base kit + Mk2 teaser, 2 threats, 2 islands, version/changelog UI.
 - **0.2 — Homestead**: cliff-wall base placement with standable decks, base storage, material-drop death with recoverable caches, respawn at last base, autosave to localStorage, cheaper idle hang.
 - **0.3 — Open Sky**: non-blocking climbable cliff *faces* (walk past, grab anywhere, free 2D wall movement, climb down from tops), seeded world remix per run, rock tiers gated by gear (granite/basalt/storm rock), Glove pulse defense, neutral cliff lizards, tutorial layer removed.
 - **0.4 — Ground Up**: climbing must be crafted, jumpable hills and stepped shelves, percentage death toll after a grace period (no world caches), playtest cheats, compact inventory.
 - **0.5 — Livestock**: pooled crafting across pack and nearby base storage, catchable respawning lizards and sky trout as recipe inputs, jetpack + Ripwing jets on a separate fuel bar, Spring boots (double jump), Scale armor, health kits, bats replace vultures.
 - **0.6 — The Shear**: thermals and the Thermal wing, ridgerunners, dedicated let-go button, Range visor, bottom-anchored menu close, iOS long-press hardening.
-- **0.7 — Wayfarer** *(current build)*: outposts and relics rewarding horizontal travel, world bounds that follow generation, jetpack as a toggle, fixed button grid, vitals above menus.
-- **0.8 — Long Night** *(current build)*: day/night cycle, storms with wind and lightning, sleeping at bases, field scanner and 11-entry log, nest robbing, skysteel, Fabricator Mk3, Storm suit, Ascender rig, and the Signal beacon ending.
-- **0.9 — Reading the Rock** *(current build)*: route features on every face, the sky chart with fog of war, discovery-gated recipes, procedural audio, camera look-ahead, a far wider visor, and no ridgerunner on the start island.
-- **0.10 — Thorn and Shale** *(current build)*: rock-blended feature colours, razor shale that cuts, genuinely slippery slick rock, thorn gating cliff tops, the Thorn hook, and a searchable wreck at camp.
-- **0.11 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **0.7 — Wayfarer**: outposts and relics rewarding horizontal travel, world bounds that follow generation, jetpack as a toggle, fixed button grid, vitals above menus.
+- **0.8 — Long Night**: day/night cycle, storms with wind and lightning, sleeping at bases, field scanner and 11-entry log, nest robbing, skysteel, Fabricator Mk3, Storm suit, Ascender rig, and the Signal beacon ending.
+- **0.9 — Reading the Rock**: route features on every face, the sky chart with fog of war, discovery-gated recipes, procedural audio, camera look-ahead, a far wider visor, and no ridgerunner on the start island.
+- **0.10 — Thorn and Shale**: rock-blended feature colours, razor shale that cuts, genuinely slippery slick rock, thorn gating cliff tops, the Thorn hook, and a searchable wreck at camp.
+- **0.11 — Cable and Seed** *(current build)*: islands roughly doubled in size, resources no longer respawn, base planters as the renewable economy, motorised two-way ziplines, tameable ridgerunners, and far less thorn on the start island.
+- **0.12 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
 - **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions

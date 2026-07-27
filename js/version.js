@@ -1,8 +1,22 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.10.0';
+const GAME_VERSION = '0.11.0';
 
 const CHANGELOG = [
+  {
+    version: '0.11.0',
+    name: 'Cable and Seed',
+    date: '2026-07-27',
+    notes: [
+      'Islands are much larger — start island nearly doubled, and every island in the chain now has room to explore',
+      'Resources no longer respawn: what you strip off the rock is gone, and every node pays out more for it',
+      'Planter boxes: build up to 4 beds at a base and grow skyberries or fiber — the only things that come back',
+      'Zipline kit (Mk2): place two anchors, string a powered cable, and ride it in either direction',
+      'Feed a ridgerunner (hold the hand while carrying food) and it stops charging you for good',
+      'Much less thorn on the start island — the first cliff you meet is always clear',
+      'Lizard ration: lizards come back, so food can never dead-end',
+    ],
+  },
   {
     version: '0.10.0',
     name: 'Thorn and Shale',

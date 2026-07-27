@@ -19,10 +19,11 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Grab a cliff face / climb | hold up while in front of one | W / up |
 | Climb down from a top | hold down | S / down |
 | Jump · hold to glide (needs Glider) | right big button | Space |
-| Harvest / catch a lizard (hold) · Glove pulse (tap, once crafted) | hand button | E |
+| Harvest / catch a lizard / feed a ridgerunner (hold) · Glove pulse (tap, once crafted) | hand button | E |
 | Jetpack thrust (tap to toggle, once crafted) | thruster button | Shift |
 | Let go of the wall | release button (appears while climbing) | Q |
 | Range visor: zoom way out (once crafted) | binocular button | V |
+| Ride a zipline / drop off it | cable button (appears beside one) | Z |
 | Sky chart | map button (top right) | M |
 | Mute / unmute | speaker button (top right) | — |
 | Enter base | house button (appears in range) | E |
@@ -37,15 +38,21 @@ Recipes are **discovered, not listed** — plans appear when you find the reason
 
 You start bare-handed: gather on foot, hop the low hills, and fabricate **Magnetic gloves** before any cliff will take you. After that, cliffs never block you — walk in front of them, hold up to grab the face, and climb anywhere on it. Climbing drains glove energy and at zero you fall. Recharge on flat ground, fastest near the camp or a base. Granite needs gloves; basalt needs **Grip spikes**; storm rock needs **Resonant magnets**.
 
+**Nothing on the rock grows back.** A harvested node is gone for good, so a stripped island is a used-up island and the way forward is outward. Every world is generated with more of each material than the whole tech tree costs, and the things that *do* renew live at home: build **Planter boxes** at a base (5 stone, 4 fiber, up to four beds) and sow a skyberry or a fiber to get three back. Cliff lizards and sky trout still respawn, and **Lizard ration** turns one into food, so you can never starve out a world you have picked clean.
+
+A **Zipline kit** (4 ore, 2 crystal, 4 fiber, at a Mk2) strings a **motorised cable** between two points you pick: place one anchor, walk or fly to the far end, place the second. It carries you *both ways* — push the stick along the line to reverse mid-span — and you can catch it anywhere along its length, not just at the ends.
+
+**Ridgerunners can be talked down.** Hold the hand button near one while carrying a skyberry or a ration and it takes the food, stops charging for good, and follows you around its island instead.
+
 Your first four falls are free. From the fifth on, each death costs a quarter of the raw materials you're carrying — gear and upgrades are never lost, and nothing is left behind in the world to go fetch.
 
-The pack has a **Playtest cheats** row (materials, base kits, unlock gear, refill vitals), and **Restart** sits at the top of the changelog panel.
+The pack has a **Playtest cheats** row (materials, base kits, zipline kits, restore stripped resources, unlock gear, refill vitals), and **Restart** sits at the top of the changelog panel.
 
 ## The world
 
 Every new game generates a fresh island chain from a random seed — resuming keeps your world, wiping the save remixes it. There are no guided goals: explore, harvest, craft, and push upward. Stingwings guard cliffs and nightwings patrol the gaps; craft the **Glove pulse** and tap the hand button to drive them off.
 
-Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to catch one, and **sky trout** are caught by gliding straight through them. Both respawn, and both are crafting inputs — lizards for Spring boots and Scale armor, trout for the Jetpack and Resonant magnets.
+Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to catch one, and **sky trout** are caught by gliding straight through them. Both respawn — the only wild things that do — and both are crafting inputs: lizards for Spring boots, Scale armor and rations, trout for the Jetpack and Resonant magnets.
 
 Fabricators pool materials from your pack **and** the storage of any base you're standing in, so you never have to shuttle rocks out of a chest you're next to.
 

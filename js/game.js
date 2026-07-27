@@ -111,6 +111,13 @@ const T = {
   featureFeedback: 0.9,
   eggFood: 25,
   climbBonusAscender: 1.6,
+  growTime: 105,          // seconds for a planted crop to come up
+  plotsPerBase: 4,
+  feedTime: 1.0,          // seconds of holding food out to a ridgerunner
+  zipSpeed: 315,          // trolley speed along a cable, either direction
+  zipMin: 150,            // shortest run worth stringing
+  zipMax: 1050,           // longest a single kit will reach
+  zipMountRange: 56,
 };
 
 // What a stretch of rock is like under your hands. Routes are made of these:
@@ -144,7 +151,7 @@ const CODEX = {
   skyfish:   { name: 'Sky trout',    icon: 'flying-trout',    note: 'Rides the same updrafts you do. Schools thicken before a storm.' },
   stingwing: { name: 'Stingwing',    icon: 'wasp-sting',      note: 'Nests on faces. Defends a radius, not a territory.' },
   nightwing: { name: 'Nightwing',    icon: 'bat',             note: 'Hunts the gaps. Bolder after dark, and it knows when you are gliding.' },
-  runner:    { name: 'Ridgerunner',  icon: 'boar',            note: 'Will not leave its island. Would happily see you leave yours.' },
+  runner:    { name: 'Ridgerunner',  icon: 'boar',            note: 'Will not leave its island. Would happily see you leave yours — unless you hold food out first.' },
   thermal:   { name: 'Thermal',      icon: 'windy-stripes',   note: 'Warm air off sunlit rock. Weaker at night, fierce in a storm.' },
   relic:     { name: 'Relic vault',  icon: 'ancient-ruins',   note: 'Someone built up here before the islands drifted apart.' },
   skysteel:  { name: 'Skysteel',     icon: 'metal-bar',       note: 'Only forms where the air thins. The islands are seeded with it.' },
@@ -154,7 +161,7 @@ const CODEX = {
 const CODEX_KEYS = Object.keys(CODEX);
 
 // Relics are deliberately absent: they are exploration trophies, never lost on death.
-const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'egg', 'skysteel', 'basekit'];
+const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'egg', 'skysteel', 'basekit', 'zipkit'];
 
 // The sky is gentle for your first few falls; after that every death costs you a cut.
 const FREE_DEATHS = 4;
@@ -175,23 +182,37 @@ function gloveTier() {
 
 // ---------- world generation ----------
 
+// Nodes are finite: what you strip off a face is gone for good. The world is
+// generated with enough of everything to finish a run, and the renewable half
+// of the economy lives in base planters instead of on a respawn timer.
 const NODE_TYPES = {
-  berry:   { name: 'Skyberries',  icon: 'berry-bush',     item: 'berry',   yield: 2, respawn: 60,  color: '#c96bff' },
-  fiber:   { name: 'Fiber',       icon: 'plant-roots',    item: 'fiber',   yield: 2, respawn: 75,  color: '#7ddc7d' },
-  stone:   { name: 'Stone',       icon: 'stone-block',    item: 'stone',   yield: 2, respawn: 75,  color: '#c9c2b2' },
-  ore:     { name: 'Iron ore',    icon: 'ore',            item: 'ore',     yield: 2, respawn: 120, color: '#ff9d6b' },
-  crystal: { name: 'Sky crystal', icon: 'crystal-growth', item: 'crystal', yield: 2, respawn: 150, color: '#6be2ff' },
-  skysteel: { name: 'Skysteel',   icon: 'metal-bar',      item: 'skysteel', yield: 1, respawn: 210, color: '#dfe7f5' },
+  berry:   { name: 'Skyberries',  icon: 'berry-bush',     item: 'berry',   yield: 3, color: '#c96bff' },
+  fiber:   { name: 'Fiber',       icon: 'plant-roots',    item: 'fiber',   yield: 3, color: '#7ddc7d' },
+  stone:   { name: 'Stone',       icon: 'stone-block',    item: 'stone',   yield: 3, color: '#c9c2b2' },
+  ore:     { name: 'Iron ore',    icon: 'ore',            item: 'ore',     yield: 3, color: '#ff9d6b' },
+  crystal: { name: 'Sky crystal', icon: 'crystal-growth', item: 'crystal', yield: 3, color: '#6be2ff' },
+  skysteel: { name: 'Skysteel',   icon: 'metal-bar',      item: 'skysteel', yield: 2, color: '#dfe7f5' },
+};
+
+// The world must contain enough of each material to reach the beacon, since
+// nothing grows back on the rock. Generation tops up any type that came up short.
+const NODE_FLOOR = { berry: 12, fiber: 20, stone: 18, ore: 16, crystal: 22, skysteel: 12 };
+
+// Crops you can raise in a base planter — the only renewable materials up here.
+const CROPS = {
+  berry: { name: 'Skyberries', icon: 'berry-bush',  seed: 'berry', item: 'berry', yield: 3, color: '#c96bff' },
+  fiber: { name: 'Fiber',      icon: 'plant-roots', seed: 'fiber', item: 'fiber', yield: 3, color: '#7ddc7d' },
 };
 
 // left/right are recomputed from the generated islands, so the walkable area always
 // hugs the actual world instead of stopping at an arbitrary invisible line.
 const WORLD = { left: 20, right: 4000, top: 300, cloudSea: 2880, kill: 2960 };
-const GEN_SPAN = 7200; // how wide generation is allowed to spread
+const GEN_SPAN = 9600; // how wide generation is allowed to spread
 
 let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [], skyfish = [];
 let thermals = [], runners = [], relics = [];
 let brambles = [], wreck = null;
+let ziplines = [], zipAnchor = null;
 let summit = null;
 let CAMP = { x: 300, y: 2500 };
 let worldSeed = 0;
@@ -269,6 +290,7 @@ function generateWorld(seed) {
 
   rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = []; skyfish = [];
   thermals = []; runners = []; relics = []; brambles = []; wreck = null;
+  ziplines = []; zipAnchor = null;
 
   const addCliff = (x, y, w, h, type, taper) => {
     const r = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), type, taper: taper || 0 };
@@ -277,7 +299,7 @@ function generateWorld(seed) {
     return r;
   };
   const addNode = (type, x, y, wall) =>
-    NODES.push({ type, x: Math.round(x), y: Math.round(y), wall: !!wall, depletedUntil: 0 });
+    NODES.push({ type, x: Math.round(x), y: Math.round(y), wall: !!wall, spent: false });
   const faceNode = (type, r) =>
     addNode(type, R(r.x + 22, r.x + r.w - 22), R(r.y + 40, r.y + r.h - 30), true);
   const addLizard = (r) => {
@@ -300,7 +322,7 @@ function generateWorld(seed) {
       const mid = r.x + r.w / 2;
       x = farFrom < mid ? R(mid + r.w * 0.15, r.x + r.w - 20) : R(r.x + 20, mid - r.w * 0.15);
     }
-    runners.push({ rock: r, x, dir: rnd() < 0.5 ? -1 : 1, mode: 'patrol', cd: 0, t: R(0, 5) });
+    runners.push({ rock: r, x, dir: rnd() < 0.5 ? -1 : 1, mode: 'patrol', cd: 0, t: R(0, 5), tame: false });
   };
   const ledgeOn = (r) => {
     // a small standable shelf overlapping the face
@@ -310,15 +332,18 @@ function generateWorld(seed) {
 
   // --- start island: safe granite, hills to scramble, practice cliffs ---
   const groundY = 2500;
-  const startW = R(760, 980);
-  const sx = R(120, 260);
-  const slab0 = addCliff(sx, groundY, startW, 300, 'granite', 170);
+  const startW = R(1240, 1560);
+  const sx = R(140, 300);
+  const slab0 = addCliff(sx, groundY, startW, 340, 'granite', 190);
   CAMP = { x: sx + R(70, 120), y: groundY };
 
-  // Everything needed for your first gloves must be reachable by jumping alone.
+  // Everything needed for your first gloves must be reachable on foot. Only
+  // nodes on the flat count toward that floor — hill-top and second-tier ones
+  // are a bonus for scrambling, not the supply line.
   let groundFiber = 0, groundStone = 0;
   const groundNode = (type, x, y) => {
     addNode(type, x, y);
+    if (Math.abs(y - groundY) > 2) return;
     if (type === 'fiber') groundFiber++;
     if (type === 'stone') groundStone++;
   };
@@ -329,13 +354,14 @@ function generateWorld(seed) {
 
   // low hills: jumpable without gloves, stepped so a couple of hops gain height
   let hx = sx + R(140, 200);
-  const nHills = RI(3, 5);
+  const nHills = RI(5, 7);
   for (let i = 0; i < nHills && hx < sx + startW - 150; i++) {
     const hw = R(76, 132);
     const hh = R(36, 86);
     const hill = addCliff(hx, groundY - hh, hw, hh, 'granite', 0);
     groundNode(rnd() < 0.5 ? 'fiber' : 'stone', hill.x + hw / 2, hill.y);
-    if (rnd() < 0.45) addBramble(hill, rnd);
+    // thorn on a scramble is a curiosity, not a gate — keep it rare down here
+    if (rnd() < 0.15) addBramble(hill, rnd);
     // a second tier you can only reach off the first
     if (rnd() < 0.55) {
       const sw = R(46, 78), sh = R(40, 74);
@@ -345,8 +371,9 @@ function generateWorld(seed) {
     }
     hx += hw + R(90, 170);
   }
-  while (groundFiber < 4) groundNode('fiber', sx + startW * R(0.2, 0.85), groundY);
-  while (groundStone < 4) groundNode('stone', sx + startW * R(0.2, 0.85), groundY);
+  while (groundFiber < 5) groundNode('fiber', sx + startW * R(0.2, 0.85), groundY);
+  while (groundStone < 5) groundNode('stone', sx + startW * R(0.2, 0.85), groundY);
+  groundNode('berry', sx + startW * R(0.55, 0.9), groundY);
   // deliberately no ridgerunner on the start island: the first ten minutes are
   // for learning to move, not for being shoved off a cliff by a boar
 
@@ -358,15 +385,16 @@ function generateWorld(seed) {
     searched: false,
   };
 
-  const nTowers = RI(2, 3);
+  const nTowers = RI(3, 4);
   let launch = { x: CAMP.x, top: groundY };
   for (let i = 0; i < nTowers; i++) {
     const tw = R(110, 190);
     const th = R(240, 420);
-    const tx = sx + startW * (0.35 + 0.62 * (i / nTowers)) + R(-25, 25);
+    const tx = sx + startW * (0.3 + 0.66 * (i / nTowers)) + R(-25, 25);
     const t = addCliff(tx, groundY - th, tw, th, 'granite', 0);
-    // most practice cliffs are crowned with thorn: the first real gate
-    if (rnd() < 0.8) addBramble(t, rnd);
+    // The first cliff you meet is always clear: learn to top out before you meet
+    // the thing that stops you topping out. Thorn shows up further along.
+    if (i > 0 && rnd() < 0.4) addBramble(t, rnd);
     ledgeOn(t);
     faceNode(rnd() < 0.55 ? 'fiber' : 'stone', t);
     faceNode(rnd() < 0.55 ? 'stone' : 'fiber', t);
@@ -385,14 +413,16 @@ function generateWorld(seed) {
   for (let i = 0; i < bandTypes.length; i++) {
     const type = bandTypes[i];
     const gap = R(240, 400);
-    const slabW = R(280, 470);
+    const slabW = R(520, 820);
     const slabTop = clamp(launch.top + R(140, 250), WORLD.top + 700, 2650);
     let x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW;
     if (x < 80 || x + slabW > GEN_SPAN - 120) { dir = -dir; x = dir > 0 ? prevRight + gap : prevLeft - gap - slabW; }
     const slab = addCliff(x, slabTop, slabW, Math.min(R(240, 380), WORLD.cloudSea - 90 - slabTop), type, R(120, 180));
 
-    // a hill or two on the deck of each island, so there is scrambling everywhere
-    if (rnd() < 0.7) {
+    // hills on the deck of each island, so there is scrambling everywhere.
+    // Wider decks get more of them — an island should take a while to walk.
+    const nDeckHills = RI(1, 3);
+    for (let k = 0; k < nDeckHills; k++) {
       const hw = R(70, 120), hh = R(36, 78);
       const hill = addCliff(x + R(30, Math.max(40, slabW - hw - 30)), slabTop - hh, hw, hh, type, 0);
       addNode(rnd() < 0.5 ? 'stone' : 'fiber', hill.x + hw / 2, hill.y);
@@ -402,12 +432,28 @@ function generateWorld(seed) {
     const th = R(320, 520);
     const tx = dir > 0 ? x + slabW - tw - R(0, 40) : x + R(0, 40);
     const tower = addCliff(tx, slabTop - th, tw, th, type, 0);
-    if (rnd() < 0.55) addBramble(tower, rnd);
+    if (rnd() < 0.5) addBramble(tower, rnd);
     ledgeOn(tower);
     if (rnd() < 0.6) ledgeOn(slab);
 
+    // a second, shorter spire at the far end of a wide deck — big islands should
+    // have more than one thing on them worth climbing
+    if (slabW > 600) {
+      const bw = R(90, 150), bh = R(150, 280);
+      const bx = dir > 0 ? x + R(20, 90) : x + slabW - bw - R(20, 90);
+      const buttress = addCliff(bx, slabTop - bh, bw, bh, type, 0);
+      ledgeOn(buttress);
+      faceNode(type === 'granite' ? 'ore' : 'crystal', buttress);
+      faceNode(rnd() < 0.5 ? 'fiber' : 'stone', buttress);
+      if (rnd() < 0.4) addBramble(buttress, rnd);
+      if (rnd() < 0.5) addLizard(buttress);
+      if (type === 'granite') graniteOre += 1;
+    }
+
     // resources by band
-    addNode('berry', x + slabW * R(0.2, 0.8), slabTop);
+    addNode('berry', x + slabW * R(0.15, 0.45), slabTop);
+    addNode('berry', x + slabW * R(0.55, 0.85), slabTop);
+    addNode(rnd() < 0.5 ? 'fiber' : 'stone', x + slabW * R(0.2, 0.8), slabTop);
     if (type === 'granite') {
       faceNode('ore', tower); faceNode('ore', slab); graniteOre += 2;
       faceNode(rnd() < 0.5 ? 'fiber' : 'stone', tower);
@@ -489,18 +535,19 @@ function generateWorld(seed) {
   for (let i = 0; i < nOutposts; i++) {
     const goRight = i % 2 === 0;
     const step = 1 + Math.floor(i / 2);
-    const ow = R(300, 480);
+    const ow = R(560, 860);
     const ox = goRight
       ? chainRight + R(420, 700) * step
       : chainLeft - R(420, 700) * step - ow;
     const oy = clamp(groundY - R(-160, 520), WORLD.top + 900, WORLD.cloudSea - 420);
-    const island = addCliff(ox, oy, ow, R(200, 300), rnd() < 0.5 ? 'granite' : 'basalt', R(110, 190));
+    const island = addCliff(ox, oy, ow, R(220, 320), rnd() < 0.5 ? 'granite' : 'basalt', R(110, 190));
 
     // worth the trip: a dense node cluster, a relic, wildlife and a way home
     addNode('berry', ox + ow * R(0.15, 0.4), oy);
     addNode('berry', ox + ow * R(0.6, 0.85), oy);
-    faceNode('ore', island); faceNode('crystal', island);
+    faceNode('ore', island); faceNode('ore', island); faceNode('crystal', island);
     faceNode(rnd() < 0.5 ? 'fiber' : 'stone', island);
+    addNode(rnd() < 0.5 ? 'fiber' : 'stone', ox + ow * R(0.25, 0.75), oy);
     if (rnd() < 0.7) {
       const tw = R(90, 150), th = R(180, 300);
       const tower = addCliff(ox + R(20, Math.max(30, ow - tw - 20)), oy - th, tw, th, island.type, 0);
@@ -519,9 +566,20 @@ function generateWorld(seed) {
     }
   }
 
-  if (NODES.filter(n => n.type === 'skysteel').length < 4) {
-    const high = rocks.filter(r => r.h > 200 && !r.deck).sort((a, b) => a.y - b.y).slice(0, 3);
-    for (const r of high) { faceNode('skysteel', r); faceNode('skysteel', r); }
+  // Nothing regrows on the rock, so a stingy roll would be a dead run. Top every
+  // material up to a floor that comfortably covers the whole tech tree, seeding
+  // skysteel high and everything else wherever there is face to hang it on.
+  const climbable = rocks.filter(r => r.h > 150 && !r.deck);
+  const highFaces = climbable.slice().sort((a, b) => a.y - b.y);
+  for (const [type, floor] of Object.entries(NODE_FLOOR)) {
+    let have = NODES.filter(n => n.type === type).length;
+    const pool = type === 'skysteel' ? highFaces.slice(0, 6) : climbable;
+    if (!pool.length) continue;
+    let guard = 0;
+    while (have < floor && guard++ < 80) {
+      faceNode(type, pool[Math.floor(rnd() * pool.length)]);
+      have++;
+    }
   }
 
   WORLD.top = Math.min(...rocks.map(r => r.y)) - 500;
@@ -546,13 +604,15 @@ const ITEMS = {
   egg:     { name: 'Wing egg',     icon: 'egg-clutch',     eat: T.eggFood },
   skysteel:{ name: 'Skysteel',     icon: 'metal-bar' },
   relic:   { name: 'Relic',        icon: 'emerald' },
-  basekit: { name: 'Base kit',     icon: 'house', place: true },
+  basekit: { name: 'Base kit',     icon: 'house',   place: 'base' },
+  zipkit:  { name: 'Zipline kit',  icon: 'ropeway', place: 'zip' },
 };
 
 const RECIPES = [
   { id: 'gloves',   tier: 'personal', name: 'Magnetic gloves',   icon: 'gloves',          cost: { fiber: 5, stone: 4 },              desc: 'Climb granite faces.', flag: 'gloves', once: true },
   { id: 'cutter',   tier: 'personal', name: 'Thorn hook',        icon: 'machete',         cost: { stone: 3, fiber: 2 },              desc: 'Cut thorn off a cliff lip.', flag: 'cutter', once: true },
   { id: 'ration',   tier: 'personal', name: 'Trail ration',      icon: 'meat',            cost: { berry: 2 },                        desc: '+35 food.' },
+  { id: 'jerky',    tier: 'personal', name: 'Lizard ration',     icon: 'gecko',           cost: { lizard: 1 },                       desc: '+35 food. Lizards come back — berry bushes do not.' },
   { id: 'medkit',   tier: 'personal', name: 'Health kit',        icon: 'first-aid-kit',   cost: { fiber: 3, berry: 2 },              desc: '+45 health.' },
   { id: 'scanner',  tier: 'personal', name: 'Field scanner',     icon: 'radar-sweep',     cost: { crystal: 2, fiber: 3 },            desc: 'Hold the hand on anything new to log it.', flag: 'scanner', once: true },
   { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 },              desc: 'Hold Jump to glide.', flag: 'glider', once: true },
@@ -563,6 +623,8 @@ const RECIPES = [
   { id: 'basekit',  tier: 'personal', name: 'Base kit',          icon: 'house',           cost: { stone: 6, fiber: 4 },              desc: 'Storage, recharge, respawn.' },
   { id: 'visor',    tier: 'personal', name: 'Range visor',       icon: 'binoculars',      cost: { crystal: 2, ore: 2, fiber: 2 },    desc: 'Toggle a long view of the sky.', flag: 'visor', once: true },
   { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 },              desc: 'Heavy fabrication here.' },
+  { id: 'planter',  tier: 'base',     name: 'Planter box',       icon: 'flower-pot',      cost: { stone: 5, fiber: 4 },              desc: 'A bed to sow berries or fiber in. Up to ' + T.plotsPerBase + ' per base.' },
+  { id: 'zipkit',   tier: 'mk2',      name: 'Zipline kit',       icon: 'ropeway',         cost: { ore: 4, crystal: 2, fiber: 4 },    desc: 'A powered cable between two anchors. Rides both ways.' },
   { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'windy-stripes',   cost: { fiber: 6, crystal: 3, skyfish: 3 }, desc: 'Ride thermals hard. Needs Glider.', flag: 'thermal', once: true, needs: 'glider' },
   { id: 'jetpack',  tier: 'mk2',      name: 'Jetpack',           icon: 'jet-pack',        cost: { ore: 4, crystal: 3, skyfish: 2 },  desc: 'Short burst of lift. Needs Glider.', flag: 'jetpack', once: true, needs: 'glider' },
   { id: 'jetpack2', tier: 'mk2',      name: 'Ripwing jets',      icon: 'thrust',          cost: { ore: 6, crystal: 6, skyfish: 4 },  desc: 'Bigger tank, harder push.', flag: 'jetpack2', once: true, needs: 'jetpack' },
@@ -583,6 +645,7 @@ const DISCOVERY = {
   gloves:   () => inv.fiber >= 1 && inv.stone >= 1,
   cutter:   () => sawThorn,
   ration:   () => inv.berry >= 2,
+  jerky:    () => inv.lizard >= 1,
   medkit:   () => inv.fiber >= 2 && player.hp < 95,
   scanner:  () => inv.crystal >= 1,
   glider:   () => flags.gloves && inv.fiber >= 3,
@@ -595,6 +658,8 @@ const DISCOVERY = {
   basekit:  () => inv.stone >= 4 && inv.fiber >= 2,
   visor:    () => inv.crystal >= 2,
   mk2:      () => bases.length > 0,
+  planter:  () => bases.length > 0 && (inv.berry >= 1 || inv.fiber >= 1),
+  zipkit:   () => bases.some(b => b.mk2) && flags.glider,
   jetpack:  () => flags.glider && (inv.skyfish >= 1 || scanned.skyfish),
   jetpack2: () => flags.jetpack,
   thermal:  () => scanned.thermal,
@@ -644,11 +709,12 @@ const player = {
   hp: 100, food: 100, energy: 100, maxEnergy: 100,
   fuel: 0, maxFuel: 0, jumps: 0,
   harvest: null,
+  zip: null,
 };
 
 function maxFuel() { return flags.jetpack2 ? T.jetFuel2 : flags.jetpack ? T.jetFuel1 : 0; }
 
-const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, egg: 0, skysteel: 0, relic: 0, basekit: 0 };
+const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, egg: 0, skysteel: 0, relic: 0, basekit: 0, zipkit: 0 };
 const flags = {
   gloves: false, glider: false, boots: false, pulse: false, cutter: false,
   battery1: false, battery2: false, spikes: false, magnets: false,
@@ -753,6 +819,9 @@ const SFX = {
   thunder:  { f: 90,  to: 32,   d: 0.85, type: 'sawtooth', g: 0.30 },
   beacon:   { f: 330, to: 660,  d: 0.9,  type: 'sine',     g: 0.22 },
   pulse:    { f: 700, to: 140,  d: 0.26, type: 'square',   g: 0.18 },
+  zip:      { f: 260, to: 1150, d: 0.30, type: 'sawtooth', g: 0.13 },
+  sow:      { f: 300, to: 480,  d: 0.22, type: 'triangle', g: 0.13 },
+  tame:     { f: 240, to: 430,  d: 0.36, type: 'sine',     g: 0.18 },
 };
 
 function sfx(name) {
@@ -867,6 +936,7 @@ const btnBase = document.getElementById('btn-base');
 const btnJet = document.getElementById('btn-jet');
 const btnRelease = document.getElementById('btn-release');
 const btnVisor = document.getElementById('btn-visor');
+const btnZip = document.getElementById('btn-zip');
 
 function bindHold(el, prop) {
   el.addEventListener('pointerdown', e => {
@@ -902,6 +972,7 @@ btnPack.addEventListener('click', () => togglePack());
 btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBase(b); });
 btnRelease.addEventListener('click', releaseClimb);
 btnVisor.addEventListener('click', toggleVisor);
+btnZip.addEventListener('click', toggleZip);
 
 function toggleVisor() {
   if (!flags.visor) return;
@@ -917,6 +988,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyC') togglePack();
   if (e.code === 'KeyQ') releaseClimb();
   if (e.code === 'KeyV') toggleVisor();
+  if (e.code === 'KeyZ') toggleZip();
   if (e.code === 'KeyM') { renderMap(); openOverlay('overlay-map'); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleJet();
   if (e.code === 'Escape') closeOverlays();
@@ -1133,10 +1205,135 @@ function standPos(place) {
   return { x: place.x, y: place.y - DECK_H };
 }
 
+// ---------- ziplines ----------
+// A cable strung between two anchors you place yourself. The trolley is
+// motorised: it drives you along the line in either direction, so a pair of
+// islands stops being a one-way glide and becomes a route you can commute.
+
+function zipLength(z) { return Math.hypot(z.x2 - z.x1, z.y2 - z.y1); }
+
+// where along the cable (0..1) a world point sits, clamped to the run
+function zipParam(z, px, py) {
+  const dx = z.x2 - z.x1, dy = z.y2 - z.y1;
+  const len2 = dx * dx + dy * dy || 1;
+  return clamp(((px - z.x1) * dx + (py - z.y1) * dy) / len2, 0, 1);
+}
+function zipPoint(z, t) { return { x: lerp(z.x1, z.x2, t), y: lerp(z.y1, z.y2, t) }; }
+
+// You can catch a cable anywhere along its length, not just at the ends.
+function nearestZip() {
+  if (player.state === 'zip') return null;
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  let best = null, bd = T.zipMountRange;
+  for (const z of ziplines) {
+    const t = zipParam(z, px, py);
+    const p = zipPoint(z, t);
+    const d = dist(px, py, p.x, p.y);
+    if (d < bd) { bd = d; best = { line: z, t }; }
+  }
+  return best;
+}
+
+function mountZip() {
+  const hit = nearestZip();
+  if (!hit) return false;
+  if (player.state === 'climb') detach(true);
+  player.state = 'zip';
+  player.climbRect = null;
+  player.harvest = null;
+  // head for the end you are not already sitting on
+  player.zip = { line: hit.line, t: hit.t, dir: hit.t < 0.5 ? 1 : -1 };
+  player.vx = 0; player.vy = 0;
+  player.jumps = 0;
+  jetOff();
+  sfx('zip');
+  return true;
+}
+
+function dismountZip(push) {
+  if (player.state !== 'zip' || !player.zip) return;
+  const z = player.zip.line;
+  const len = zipLength(z) || 1;
+  const ax = (z.x2 - z.x1) / len, ay = (z.y2 - z.y1) / len;
+  const d = player.zip.dir;
+  player.state = 'air';
+  player.vx = push ? ax * d * T.zipSpeed * 0.75 : 0;
+  player.vy = push ? ay * d * T.zipSpeed * 0.75 : 0;
+  player.zip = null;
+  player.detachTimer = 0.12;
+}
+
+function toggleZip() {
+  if (player.state === 'zip') dismountZip(false);
+  else mountZip();
+}
+
+// Stringing a line takes two visits: drop an anchor, walk (or fly) to the far
+// end, drop the other. The kit is only spent when the cable actually connects.
+function placeZip() {
+  if (inv.zipkit <= 0) return;
+  if (player.state === 'zip') { toast('Not while you are on a cable', 'bad', 'ropeway'); return; }
+  const px = Math.round(player.x + P_W / 2), py = Math.round(player.y + P_H / 2);
+  if (!zipAnchor) {
+    zipAnchor = { x: px, y: py };
+    toast('Anchor bolted — place the far end', 'good', 'pulley-hook');
+    sfx('craft');
+    closeOverlays();
+    renderPack();
+    saveGame();
+    return;
+  }
+  const d = dist(px, py, zipAnchor.x, zipAnchor.y);
+  if (d < 70) {
+    zipAnchor = null;
+    toast('Anchor pulled up', 'bad', 'pulley-hook');
+    renderPack();
+    saveGame();
+    return;
+  }
+  if (d < T.zipMin) { toast('Too short to be worth a kit', 'bad', 'ropeway'); return; }
+  if (d > T.zipMax) { toast('Out of cable — the far end is too far', 'bad', 'ropeway'); return; }
+  ziplines.push({ x1: zipAnchor.x, y1: zipAnchor.y, x2: px, y2: py });
+  zipAnchor = null;
+  inv.zipkit -= 1;
+  toast('Zipline live — tap the cable button to ride', 'good', 'ropeway');
+  sfx('craft');
+  closeOverlays();
+  renderPack();
+  saveGame();
+}
+
+const PLACERS = { base: () => placeBase(), zip: () => placeZip() };
+
 function updatePlayer(dt) {
   player.detachTimer = Math.max(0, player.detachTimer - dt);
   player.invuln = Math.max(0, player.invuln - dt);
   if (input.x !== 0) player.faceDir = input.x > 0 ? 1 : -1;
+
+  // riding a cable: the motor does the work, the stick picks the direction
+  if (player.state === 'zip' && player.zip) {
+    const z = player.zip.line;
+    const len = zipLength(z) || 1;
+    const ax = (z.x2 - z.x1) / len, ay = (z.y2 - z.y1) / len;
+    const along = input.x * ax + input.y * ay;
+    if (Math.abs(along) > 0.3) player.zip.dir = along > 0 ? 1 : -1;
+    player.zip.t = clamp(player.zip.t + player.zip.dir * (T.zipSpeed / len) * dt, 0, 1);
+    const p = zipPoint(z, player.zip.t);
+    player.x = p.x - P_W / 2;
+    player.y = p.y + 8; // you hang under the cable
+    player.vx = ax * player.zip.dir * T.zipSpeed;
+    player.vy = ay * player.zip.dir * T.zipSpeed;
+    if (input.jumpPressed) {
+      dismountZip(true);
+      player.vy = Math.min(player.vy, -240);
+      return;
+    }
+    if ((player.zip.dir > 0 && player.zip.t >= 1) || (player.zip.dir < 0 && player.zip.t <= 0)) {
+      dismountZip(true);
+    }
+    return;
+  }
+  if (player.state === 'zip' && !player.zip) player.state = 'air';
 
   if (player.state === 'climb') {
     const r = player.climbRect;
@@ -1366,6 +1563,7 @@ function respawn() {
   player.vx = 0; player.vy = 0;
   player.state = 'air';
   player.climbRect = null;
+  player.zip = null;
   document.getElementById('overlay-death').classList.add('hidden');
   document.body.classList.toggle('menu-open', anyOverlayOpen());
   paused = anyOverlayOpen();
@@ -1401,7 +1599,7 @@ function nearestNode() {
   const px = player.x + P_W / 2, py = player.y + P_H / 2;
   let best = null, bd = 70;
   for (const n of NODES) {
-    if (gameTime < n.depletedUntil) continue;
+    if (n.spent) continue;
     const d = dist(px, py, n.x, n.y);
     if (d < bd) { bd = d; best = n; }
   }
@@ -1500,6 +1698,20 @@ function nearestBase() {
   return null;
 }
 
+// A ridgerunner will take food out of your hand — once. After that it stops
+// treating you as something to be shouldered off a cliff.
+function nearestFeedable() {
+  if (inv.berry <= 0 && inv.ration <= 0) return null;
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  let best = null, bd = 84;
+  for (const rr of runners) {
+    if (rr.tame) continue;
+    const d = dist(px, py, rr.x, rr.rock.y - 18);
+    if (d < bd) { bd = d; best = rr; }
+  }
+  return best;
+}
+
 function threatInRange(radius) {
   const px = player.x + P_W / 2, py = player.y + P_H / 2;
   for (const w of stingwings) if (dist(px, py, w.x, w.y) < radius) return true;
@@ -1544,7 +1756,9 @@ function updateInteraction(dt) {
   const thorn = flags.cutter ? thornNear : null;
   const nest = (relic || wr || thorn) ? null : nearestNest();
   const scan = (relic || nest || wr || thorn) ? null : unscannedTarget();
-  if (relic || nest || wr || thorn) { node = null; critter = null; }
+  // logging a beast comes before befriending it — the scan is a one-off
+  const feed = (relic || wr || thorn || nest || scan) ? null : nearestFeedable();
+  if (relic || nest || wr || thorn || feed) { node = null; critter = null; }
   if (scan) { node = null; critter = null; } // logging something new comes first
 
   // a tap of the hand doubles as the pulse when something is on you
@@ -1608,6 +1822,21 @@ function updateInteraction(dt) {
       player.harvest = null;
       recordScan(key);
     }
+  } else if (input.interactHeld && feed) {
+    if (!player.harvest || player.harvest.feed !== feed) player.harvest = { feed, t: 0, total: T.feedTime };
+    player.harvest.t += dt;
+    if (player.harvest.t >= T.feedTime) {
+      const food = inv.berry > 0 ? 'berry' : 'ration';
+      inv[food] -= 1;
+      feed.tame = true;
+      feed.mode = 'patrol';
+      feed.cd = 0;
+      player.harvest = null;
+      toast('It took the food — no more charging', 'good', 'heart-plus');
+      sfx('tame');
+      checkDiscoveries();
+      saveGame();
+    }
   } else if (input.interactHeld && critter) {
     if (!player.harvest || player.harvest.critter !== critter.c) player.harvest = { critter: critter.c, t: 0, total: T.captureTime };
     player.harvest.t += dt;
@@ -1628,7 +1857,7 @@ function updateInteraction(dt) {
         player.energy = Math.max(0, player.energy - T.harvestWallCost);
       }
       inv[def.item] += def.yield;
-      node.depletedUntil = gameTime + def.respawn;
+      node.spent = true; // stripped for good — what grows back grows in a planter
       player.harvest = null;
       toast('+' + def.yield + ' ' + def.name, 'good', def.icon);
       sfx('harvest');
@@ -1651,12 +1880,15 @@ function updateInteraction(dt) {
   const ring = document.querySelector('#btn-interact .abtn-ring circle');
   const prog = player.harvest ? player.harvest.t / player.harvest.total : 0;
   ring.style.strokeDashoffset = String(207.3 * (1 - prog));
-  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic || !!nest || !!scan || !!wr || !!thorn);
+  btnInteract.classList.toggle('glide-ready', !!node || !!critter || !!relic || !!nest || !!scan || !!wr || !!thorn || !!feed);
   btnInteract.classList.toggle('scanning', !!scan && !relic && !nest);
   btnBase.classList.toggle('hidden', !nearestBase());
   btnJet.classList.toggle('hidden', !flags.jetpack);
   btnRelease.classList.toggle('hidden', player.state !== 'climb');
   btnVisor.classList.toggle('hidden', !flags.visor);
+  const onZip = player.state === 'zip';
+  btnZip.classList.toggle('hidden', !onZip && !nearestZip());
+  btnZip.classList.toggle('on', onZip);
 }
 
 // ---------- creatures ----------
@@ -1764,7 +1996,8 @@ function updateSkyfish(dt) {
 }
 
 // Ridgerunner: patrols an island top, then shoulder-charges. Barely hurts —
-// the danger is the shove and the edge behind you.
+// the danger is the shove and the edge behind you. Feed one and it never charges
+// again: it ambles after you instead, which is most of what a boar is good for.
 function updateRunners(dt) {
   const pc = playerCenter();
   for (const rr of runners) {
@@ -1774,6 +2007,22 @@ function updateRunners(dt) {
     const onSameTop = player.state === 'ground' && Math.abs(player.y + P_H - r.y) < 4 &&
       player.x + P_W > r.x && player.x < r.x + r.w;
     const dx = pc.x - rr.x;
+
+    if (rr.tame) {
+      // trots over to you when you are on its island, mooches about otherwise
+      rr.mode = 'patrol';
+      const wantX = onSameTop && Math.abs(dx) > 40 ? pc.x : null;
+      if (wantX !== null) {
+        rr.dir = dx > 0 ? 1 : -1;
+        rr.x += rr.dir * T.runnerSpeed * 0.7 * dt;
+      } else if (wantX === null && !onSameTop) {
+        rr.x += rr.dir * T.runnerSpeed * 0.45 * dt;
+      }
+      rr.x = clamp(rr.x, r.x + 14, r.x + r.w - 14);
+      if (rr.x <= r.x + 14) rr.dir = 1;
+      if (rr.x >= r.x + r.w - 14) rr.dir = -1;
+      continue;
+    }
 
     if (rr.mode === 'patrol') {
       rr.x += rr.dir * T.runnerSpeed * dt;
@@ -1883,11 +2132,20 @@ function craft(recipe, base) {
   if (recipe.locked) return;
   if (recipe.once && flags[recipe.flag]) return;
   if (recipe.needs && !flags[recipe.needs]) return;
+  if (recipe.id === 'planter') {
+    if (!base) return;
+    if (!base.plots) base.plots = [];
+    if (base.plots.length >= T.plotsPerBase) {
+      toast('No room for another bed here', 'bad', 'flower-pot');
+      return;
+    }
+  }
   if (!canAfford(recipe)) { toast('Not enough materials', 'bad'); return; }
   for (const [k, v] of Object.entries(recipe.cost)) spend(k, v);
 
   if (recipe.id === 'gloves') { flags.gloves = true; toast('Gloves fitted — hold up at a face', 'good', 'gloves'); }
   if (recipe.id === 'ration') { inv.ration += 1; toast('Trail ration', 'good', 'meat'); }
+  if (recipe.id === 'jerky') { inv.ration += 1; toast('Lizard ration', 'good', 'meat'); }
   if (recipe.id === 'medkit') { inv.medkit += 1; toast('Health kit', 'good', 'first-aid-kit'); }
   if (recipe.id === 'boots') { flags.boots = true; toast('Spring boots — jump again in mid-air', 'good', 'boots'); }
   if (recipe.id === 'armor') { flags.armor = true; toast('Scale armor fitted', 'good', 'armor-vest'); }
@@ -1910,6 +2168,11 @@ function craft(recipe, base) {
   if (recipe.id === 'battery1') { flags.battery1 = true; player.maxEnergy = 150; player.energy = 150; toast('Battery Mk1 — 150', 'good', 'battery-pack'); }
   if (recipe.id === 'battery2') { flags.battery2 = true; player.maxEnergy = 220; player.energy = 220; toast('Battery Mk2 — 220', 'good', 'battery-pack'); }
   if (recipe.id === 'basekit') { inv.basekit += 1; toast('Base kit ready', 'good', 'house'); }
+  if (recipe.id === 'zipkit') { inv.zipkit += 1; toast('Zipline kit — place both ends from your pack', 'good', 'ropeway'); }
+  if (recipe.id === 'planter' && base) {
+    base.plots.push({ crop: null, at: 0 });
+    toast('Planter box built — sow a seed in it', 'good', 'flower-pot');
+  }
   if (recipe.id === 'mk2' && base) { base.mk2 = true; toast('Fabricator Mk2 online', 'good', 'anvil'); }
   sfx('craft');
   checkDiscoveries();
@@ -1972,7 +2235,7 @@ function placeBase() {
   }
   let b;
   if (onWall) {
-    b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false, wall: true, store: {} };
+    b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false, wall: true, store: {}, plots: [] };
     makeWallDeck(b);
     bases.push(b);
     lastSafe = b;
@@ -1983,7 +2246,7 @@ function placeBase() {
     player.y = sp.y - P_H;
     toast('Base bolted to the cliff', 'good', 'hut');
   } else {
-    b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false, wall: false, store: {} };
+    b = { x: player.x + P_W / 2, y: player.y + P_H, mk2: false, wall: false, store: {}, plots: [] };
     bases.push(b);
     lastSafe = b;
     toast('Base placed', 'good', 'house');
@@ -1991,6 +2254,51 @@ function placeBase() {
   inv.basekit -= 1;
   checkDiscoveries();
   closeOverlays();
+  saveGame();
+}
+
+// ---------- planters ----------
+// Nodes on the rock are finite. A base planter is the one thing up here that
+// grows back, which is what makes a base worth coming home to.
+
+function plotProgress(p) {
+  if (!p.crop) return 0;
+  return clamp((gameTime - p.at) / T.growTime, 0, 1);
+}
+function plotReady(p) { return !!p.crop && plotProgress(p) >= 1; }
+
+function sowPlot(base, plot, crop) {
+  const def = CROPS[crop];
+  if (!def || plot.crop) return;
+  // a seed comes out of your pack, or out of this base's own chest
+  if ((inv[def.seed] || 0) > 0) inv[def.seed] -= 1;
+  else if ((base.store[def.seed] || 0) > 0) {
+    base.store[def.seed] -= 1;
+    if (base.store[def.seed] <= 0) delete base.store[def.seed];
+  } else {
+    toast('No ' + def.name.toLowerCase() + ' to sow', 'bad', def.icon);
+    return;
+  }
+  plot.crop = crop;
+  plot.at = gameTime;
+  toast('Sown — ' + def.name.toLowerCase(), 'good', 'sprout');
+  sfx('sow');
+  renderBase(base);
+  renderPack();
+  saveGame();
+}
+
+function pickPlot(base, plot) {
+  if (!plotReady(plot)) return;
+  const def = CROPS[plot.crop];
+  inv[def.item] += def.yield;
+  plot.crop = null;
+  plot.at = 0;
+  toast('+' + def.yield + ' ' + def.name, 'good', def.icon);
+  sfx('harvest');
+  checkDiscoveries();
+  renderBase(base);
+  renderPack();
   saveGame();
 }
 
@@ -2044,10 +2352,17 @@ function saveGame() {
       lizards: lizards.map(l => Math.max(0, l.goneUntil - gameTime)),
       skyfish: skyfish.map(f => Math.max(0, f.goneUntil - gameTime)),
       inv, flags,
-      bases: bases.map(b => ({ x: b.x, y: b.y, mk2: b.mk2, mk3: !!b.mk3, wall: !!b.wall, store: b.store || {} })),
+      bases: bases.map(b => ({
+        x: b.x, y: b.y, mk2: b.mk2, mk3: !!b.mk3, wall: !!b.wall, store: b.store || {},
+        // plots keep time-to-ripe, not an absolute stamp, so a reload is seamless
+        plots: (b.plots || []).map(p => ({ c: p.crop, left: p.crop ? Math.max(0, p.at + T.growTime - gameTime) : 0 })),
+      })),
       lastSafe: bases.indexOf(lastSafe),
       deaths,
-      nodes: NODES.map(n => Math.max(0, n.depletedUntil - gameTime)),
+      spent: NODES.map(n => (n.spent ? 1 : 0)),
+      ziplines: ziplines.map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 })),
+      zipAnchor,
+      tame: runners.map(r => (r.tame ? 1 : 0)),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     saveNoticeUntil = gameTime + 1.4;
@@ -2063,19 +2378,28 @@ function loadGame() {
   gameTime = data.gameTime || 0;
   Object.assign(player, data.player);
   player.vx = 0; player.vy = 0; player.state = 'air'; player.climbRect = null; player.harvest = null;
+  player.zip = null;
   for (const k of Object.keys(inv)) inv[k] = data.inv && data.inv[k] ? data.inv[k] : 0;
   for (const k of Object.keys(flags)) flags[k] = !!(data.flags && data.flags[k]);
 
   bases.length = 0;
   for (const b of data.bases || []) {
-    const base = { x: b.x, y: b.y, mk2: !!b.mk2, mk3: !!b.mk3, wall: !!b.wall, store: b.store || {} };
+    const base = { x: b.x, y: b.y, mk2: !!b.mk2, mk3: !!b.mk3, wall: !!b.wall, store: b.store || {}, plots: [] };
+    for (const p of b.plots || []) {
+      base.plots.push({ crop: p.c || null, at: p.c ? gameTime - (T.growTime - (p.left || 0)) : 0 });
+    }
     if (base.wall) makeWallDeck(base);
     bases.push(base);
   }
   const li = typeof data.lastSafe === 'number' ? data.lastSafe : -1;
   lastSafe = li >= 0 && bases[li] ? bases[li] : CAMP;
   deaths = data.deaths || 0;
-  if (data.nodes) NODES.forEach((n, i) => { n.depletedUntil = gameTime + (data.nodes[i] || 0); });
+  // v0.11 made nodes finite; a pre-0.11 save only carried respawn timers, and
+  // anything that was mid-respawn then is simply treated as still standing.
+  if (data.spent) NODES.forEach((n, i) => { n.spent = !!data.spent[i]; });
+  ziplines = (data.ziplines || []).map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 }));
+  zipAnchor = data.zipAnchor || null;
+  if (data.tame) runners.forEach((r, i) => { r.tame = !!data.tame[i]; });
   if (data.relics) relics.forEach((r, i) => { r.taken = !!data.relics[i]; });
   if (data.brambles) brambles.forEach((b, i) => { b.cutUntil = gameTime + (data.brambles[i] || 0); });
   if (wreck) wreck.searched = !!data.wreck;
@@ -2191,8 +2515,18 @@ function renderPack() {
   for (const [id, def] of Object.entries(ITEMS)) {
     if (inv[id] <= 0) continue;
     any = true;
-    const use = (def.eat || def.heal) ? () => useItem(id) : def.place ? placeBase : null;
-    grid.appendChild(invTile(id, def, inv[id], use, def.heal ? 'Use' : def.eat ? 'Eat' : 'Place'));
+    const use = (def.eat || def.heal) ? () => useItem(id) : def.place ? PLACERS[def.place] : null;
+    const label = def.heal ? 'Use' : def.eat ? 'Eat'
+      : (id === 'zipkit' && zipAnchor) ? 'Place the far end' : 'Place';
+    grid.appendChild(invTile(id, def, inv[id], use, label));
+  }
+  // a half-strung cable is easy to forget about — say so in the pack
+  if (zipAnchor) {
+    const note = document.createElement('div');
+    note.className = 'inv-empty';
+    note.textContent = 'A zipline anchor is waiting for its far end. Place a kit again where you want the other end — or on the same spot to pull it up.';
+    grid.appendChild(note);
+    any = true;
   }
   if (flags.beacon && !beaconLit) {
     const el = invTile('beacon', { name: 'Signal beacon', icon: 'lighthouse' }, 1, lightBeacon, 'Raise');
@@ -2266,6 +2600,16 @@ const CHEATS = {
     inv.basekit += 3;
     toast('+3 base kits', 'good', 'house');
   },
+  zip() {
+    inv.zipkit += 3;
+    known.zipkit = true;
+    toast('+3 zipline kits', 'good', 'ropeway');
+  },
+  regrow() {
+    // put every stripped node back — for testing the world, not for playing it
+    for (const n of NODES) n.spent = false;
+    toast('World resources restored', 'good', 'sprout');
+  },
 };
 
 document.querySelectorAll('[data-cheat]').forEach(btn => {
@@ -2304,11 +2648,16 @@ function renderBase(base) {
   dep.disabled = !carrying;
   dep.onclick = () => depositAll(base);
 
+  renderGarden(base);
+
   const list = document.getElementById('base-recipe-list');
   list.innerHTML = '';
-  if (!base.mk2) {
-    if (known.mk2) list.appendChild(recipeRow(RECIPES.find(r => r.id === 'mk2'), base));
-  } else {
+  for (const r of RECIPES) {
+    if (r.tier !== 'base' || !known[r.id]) continue;
+    if (r.id === 'mk2' && base.mk2) continue;
+    list.appendChild(recipeRow(r, base));
+  }
+  if (base.mk2) {
     for (const r of RECIPES) if (r.tier === 'mk2' && known[r.id]) list.appendChild(recipeRow(r, base));
     if (base.mk3) for (const r of RECIPES) if (r.tier === 'mk3' && known[r.id]) list.appendChild(recipeRow(r, base));
   }
@@ -2317,6 +2666,59 @@ function renderBase(base) {
   rest.disabled = player.food < 25;
   rest.textContent = isNight() ? 'Sleep until dawn' : 'Rest here';
   rest.onclick = restUntilDawn;
+}
+
+// The garden panel: one row per planter box, each either bare, growing, or ripe.
+function renderGarden(base) {
+  const wrap = document.getElementById('base-garden');
+  const head = document.getElementById('garden-head');
+  if (!wrap || !head) return;
+  const plots = base.plots || [];
+  head.classList.toggle('hidden', plots.length === 0);
+  wrap.classList.toggle('hidden', plots.length === 0);
+  wrap.innerHTML = '';
+  if (!plots.length) return;
+
+  for (const plot of plots) {
+    const row = document.createElement('div');
+    row.className = 'plot';
+    if (!plot.crop) {
+      row.innerHTML = '<span class="p-icon">' + svgIcon('flower-pot') + '</span>' +
+        '<div class="p-body"><div class="p-name">Bare bed</div><div class="p-note">Sow a seed from your pack or this chest.</div></div>' +
+        '<div class="p-actions"></div>';
+      const actions = row.querySelector('.p-actions');
+      for (const [key, def] of Object.entries(CROPS)) {
+        const b = document.createElement('button');
+        b.className = 'mini-btn';
+        b.type = 'button';
+        b.textContent = 'Sow ' + def.name.toLowerCase();
+        b.disabled = (inv[def.seed] || 0) <= 0 && (base.store[def.seed] || 0) <= 0;
+        b.addEventListener('click', () => sowPlot(base, plot, key));
+        actions.appendChild(b);
+      }
+    } else {
+      const def = CROPS[plot.crop];
+      const ready = plotReady(plot);
+      const pct = Math.round(plotProgress(plot) * 100);
+      row.className += ready ? ' ripe' : ' growing';
+      row.innerHTML = '<span class="p-icon">' + svgIcon(ready ? def.icon : 'sprout') + '</span>' +
+        '<div class="p-body"><div class="p-name"></div><div class="p-note"></div>' +
+        '<div class="p-bar"><div style="width:' + pct + '%"></div></div></div>' +
+        '<div class="p-actions"></div>';
+      row.querySelector('.p-name').textContent = def.name;
+      row.querySelector('.p-note').textContent = ready
+        ? 'Ripe — ' + def.yield + ' to pick.'
+        : 'Growing — ' + Math.max(1, Math.ceil((1 - plotProgress(plot)) * T.growTime)) + 's to go.';
+      const b = document.createElement('button');
+      b.className = 'mini-btn';
+      b.type = 'button';
+      b.textContent = 'Pick';
+      b.disabled = !ready;
+      b.addEventListener('click', () => pickPlot(base, plot));
+      row.querySelector('.p-actions').appendChild(b);
+    }
+    wrap.appendChild(row);
+  }
 }
 
 // ---------- field log ----------
@@ -2390,6 +2792,13 @@ function renderMap() {
     g.fillStyle = col;
     g.beginPath(); g.arc(mx(x), my(y), rad || 4, 0, Math.PI * 2); g.fill();
   };
+
+  // your own cables, so the chart shows the routes you built as well as the rock
+  g.strokeStyle = 'rgba(159,182,216,0.85)';
+  g.lineWidth = 1.5;
+  for (const z of ziplines) {
+    g.beginPath(); g.moveTo(mx(z.x1), my(z.y1)); g.lineTo(mx(z.x2), my(z.y2)); g.stroke();
+  }
 
   dot(CAMP.x, CAMP.y, '#ffb454', 5);
   for (const b of bases) dot(b.x, b.y, '#8fc7ff', 5);
@@ -2465,6 +2874,7 @@ document.querySelector('#bar-fuel .bar-icon').innerHTML = svgIcon('fuel-tank');
 document.querySelector('#btn-jet .abtn-icon').innerHTML = svgIcon('jet-pack');
 document.querySelector('#btn-release .abtn-icon').innerHTML = svgIcon('falling');
 document.querySelector('#btn-visor .abtn-icon').innerHTML = svgIcon('binoculars');
+document.querySelector('#btn-zip .abtn-icon').innerHTML = svgIcon('ropeway');
 document.querySelector('#version-badge .badge-icon').innerHTML = svgIcon('mountain-climbing');
 document.getElementById('version-text').textContent = 'v' + GAME_VERSION;
 document.querySelector('#btn-pack .abtn-icon').innerHTML = svgIcon('knapsack');
@@ -2767,13 +3177,46 @@ function render() {
     ctx.save();
     ctx.translate(rr.x, rr.rock.y - 17 + Math.abs(Math.sin(rr.t * (rr.mode === 'charge' ? 14 : 6))) * 2);
     if (rr.dir < 0) ctx.scale(-1, 1);
-    drawIcon(ctx, 'boar', 0, 0, 36, rr.mode === 'charge' ? '#e08a5a' : '#9a7355');
+    drawIcon(ctx, 'boar', 0, 0, 36, rr.tame ? '#8fd6a0' : rr.mode === 'charge' ? '#e08a5a' : '#9a7355');
     ctx.restore();
-    if (rr.mode === 'charge') {
+    if (rr.mode === 'charge' && !rr.tame) {
       ctx.globalAlpha = 0.5;
       drawIcon(ctx, 'windy-stripes', rr.x - rr.dir * 26, rr.rock.y - 20, 18, '#e08a5a');
       ctx.globalAlpha = 1;
     }
+    if (rr.tame) {
+      drawIcon(ctx, 'heart-plus', rr.x + 16, rr.rock.y - 38 + Math.sin(gameTime * 2 + rr.x) * 2, 15, '#8fd6a0', 0.75);
+    }
+  }
+
+  // ziplines: a taut cable between two bolted anchors
+  for (const z of ziplines) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(20,28,48,0.9)'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(z.x1, z.y1); ctx.lineTo(z.x2, z.y2); ctx.stroke();
+    ctx.strokeStyle = '#9fb6d8'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(z.x1, z.y1); ctx.lineTo(z.x2, z.y2); ctx.stroke();
+    ctx.restore();
+    drawIcon(ctx, 'pulley-hook', z.x1, z.y1, 22, '#c7d6ee');
+    drawIcon(ctx, 'pulley-hook', z.x2, z.y2, 22, '#c7d6ee');
+  }
+  // a half-placed line: dashed to your hands, green while it would still reach
+  if (zipAnchor) {
+    const pc = playerCenter();
+    const d = dist(pc.x, pc.y, zipAnchor.x, zipAnchor.y);
+    const ok = d >= T.zipMin && d <= T.zipMax;
+    ctx.save();
+    ctx.setLineDash([10, 10]);
+    ctx.strokeStyle = ok ? 'rgba(143,224,138,0.7)' : 'rgba(255,138,148,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(zipAnchor.x, zipAnchor.y); ctx.lineTo(pc.x, pc.y); ctx.stroke();
+    ctx.restore();
+    drawIcon(ctx, 'pulley-hook', zipAnchor.x, zipAnchor.y, 24, ok ? '#8fe08a' : '#ff8a94');
+  }
+  // the trolley you are hanging from
+  if (player.state === 'zip' && player.zip) {
+    const p = zipPoint(player.zip.line, player.zip.t);
+    drawIcon(ctx, 'ropeway', p.x, p.y - 2, 24, '#c7d6ee');
   }
 
   // camp
@@ -2793,6 +3236,16 @@ function render() {
     drawIcon(ctx, 'chest', b.x - 26, by - 12, 18, '#c9a86b');
     if (b.mk2) drawIcon(ctx, 'anvil', b.x + 26, by - 12, 19, '#ffd76b');
     drawIcon(ctx, 'flying-flag', b.x + 4, by - 48, 15, 'rgba(143,199,255,0.55)');
+    // planter beds line up beside the hut, and show what is coming up in them
+    (b.plots || []).forEach((p, i) => {
+      const gx = b.x + 44 + i * 22;
+      drawIcon(ctx, 'flower-pot', gx, by - 10, 17, '#a98a63');
+      if (!p.crop) return;
+      const ready = plotReady(p);
+      const def = CROPS[p.crop];
+      drawIcon(ctx, ready ? def.icon : 'sprout', gx, by - 24, ready ? 16 : 13,
+        ready ? def.color : '#7ddc7d', ready ? 0.95 : 0.7);
+    });
   }
 
 
@@ -2843,7 +3296,7 @@ function render() {
   const active = nearestNode();
   for (const n of NODES) {
     const def = NODE_TYPES[n.type];
-    const depleted = gameTime < n.depletedUntil;
+    const depleted = n.spent;
     const bob = n.wall ? 0 : Math.sin(gameTime * 2 + n.x) * 2;
     const nx = n.x, ny = n.y - (n.wall ? 0 : 14) + bob;
     ctx.globalAlpha = depleted ? 0.22 : 1;
@@ -3225,7 +3678,7 @@ document.getElementById('btn-sound').innerHTML = svgIcon(audio.on ? 'sound-on' :
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Thorn and Shale', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Cable and Seed', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -3249,6 +3702,12 @@ window.SKYREACH = {
   get relics() { return relics; },
   get brambles() { return brambles; },
   get wreck() { return wreck; },
+  get ziplines() { return ziplines; },
+  get zipAnchor() { return zipAnchor; },
+  get crops() { return CROPS; },
+  get nodeFloor() { return NODE_FLOOR; },
+  placeZip, mountZip, dismountZip, toggleZip, nearestZip,
+  sowPlot, pickPlot, plotReady, plotProgress, nearestFeedable, placeBase,
   get jetOn() { return jetOn; },
   get dayTime() { return dayTime; }, set dayTime(v) { dayTime = v; },
   get storming() { return stormLeft > 0; },

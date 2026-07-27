@@ -2,6 +2,18 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.11.0 — Cable and Seed (2026-07-27)
+
+- Islands are much larger — the start island is nearly double its old width, and every island in the chain has room to explore
+- Resources no longer respawn: what you strip off the rock is gone for good, and every node pays out more for it
+- World generation now guarantees enough of every material to finish a run, since nothing grows back
+- Planter boxes: build up to 4 beds at a base and grow skyberries or fiber — the only renewable materials up here
+- Zipline kit (Mk2): place two anchors, string a powered cable, and ride it in either direction
+- Feed a ridgerunner (hold the hand while carrying food) and it stops charging you for good — it follows you around instead
+- Much less thorn on the start island, and the first cliff you meet is always clear
+- Lizard ration: lizards come back, so food can never dead-end
+- Second spires on wide islands, more hills per deck, and denser outposts
+
 ## v0.10.0 — Thorn and Shale (2026-07-26)
 
 - Cliff patches are now tinted from the rock they sit on — subtle, but the patterns still read at a glance
