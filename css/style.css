@@ -322,6 +322,22 @@ button { touch-action: manipulation; } /* taps fire instantly, double-tap never 
 .log-entry .l-name { font-size: 13px; font-weight: 600; }
 .log-entry .l-note { font-size: 11px; color: #9db2d8; line-height: 1.45; }
 
+/* survey lens rows in the pack */
+#survey-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
+#survey-list.hidden, #survey-head.hidden { display: none; }
+.survey-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 12px;
+  background: rgba(18, 28, 52, .72);
+  border: 1px solid rgba(120, 150, 200, .2);
+}
+.survey-row.tracked { border-color: rgba(143, 227, 255, .65); background: rgba(30, 52, 88, .78); }
+.survey-row.dry { opacity: .5; }
+.survey-row .s-icon { width: 22px; height: 22px; flex: 0 0 22px; color: #a9c3e8; }
+.survey-row .s-body { flex: 1; min-width: 0; }
+.survey-row .s-name { font-size: 13px; color: #e8eefb; }
+.survey-row .s-note { font-size: 11px; color: #9db2d8; }
+
 /* planter beds in the base panel */
 #base-garden { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
 #base-garden.hidden, #garden-head.hidden { display: none; }

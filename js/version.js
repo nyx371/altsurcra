@@ -1,8 +1,19 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.11.0';
+const GAME_VERSION = '0.12.0';
 
 const CHANGELOG = [
+  {
+    version: '0.12.0',
+    name: 'Stocktake',
+    date: '2026-07-27',
+    notes: [
+      'Survey lens (2 crystal, 2 ore): the pack now counts how much of each material is still standing out there',
+      'Tap Track on a material and an arrow points to the nearest deposit you have already charted, with its distance',
+      'The sky chart marks every unstripped deposit in charted ground, coloured by material',
+      'The camera sits noticeably closer in — the world reads at a comfortable size again',
+    ],
+  },
   {
     version: '0.11.0',
     name: 'Cable and Seed',

@@ -186,6 +186,7 @@ Personal fabricator:
 | Glove battery Mk1 | 2 ore, 2 crystal | Max energy 100 → 150 |
 | Base kit | 6 stone, 4 fiber | Placeable base platform |
 | Lizard ration **[v0.11]** | 1 cliff lizard | Food +35, from a source that respawns |
+| Survey lens **[v0.12]** | 2 crystal, 2 ore | Counts and tracks deposits you have charted |
 
 Base (at a placed base, with Mk2 built):
 
@@ -201,7 +202,7 @@ Base (at a placed base, with Mk2 built):
 ### 6.4 Progression skeleton
 
 Reach is gated by grip, energy ceiling and air tech, not by artificial walls:
-`bare hands (hills only) → search the wreck → Thorn hook → Magnetic gloves → Glider → Spring boots → Field scanner → Range visor → Battery Mk1 → first base + planters → Mk2 → Grip spikes (basalt) → Zipline kit → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
+`bare hands (hills only) → search the wreck → Thorn hook → Magnetic gloves → Glider → Spring boots → Field scanner → Survey lens → Range visor → Battery Mk1 → first base + planters → Mk2 → Grip spikes (basalt) → Zipline kit → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
 
 Three separate ways to gain height now exist and they cost different things: **climbing** spends glove energy, the **jetpack** spends its own fuel, and **thermals** cost nothing but require you to be in the right place. That spread is deliberate — it keeps "how do I get up there?" an interesting question at every tier.
 
@@ -243,6 +244,16 @@ A **Planter box** (5 stone, 4 fiber) is built at a base, up to four per base. Ea
 This exists because making nodes finite (4.4) removed the game's only renewable material source, and a survival game with a strictly decreasing supply of food is a countdown, not a loop. Putting the regrowth at a base — and only at a base — means the answer to "I am running low" is *go home*, which is the sentence a base-building game wants you to say. It also gives the first base a job on day one, well before you can afford a Mk2, and it turns a berry you were about to eat into a decision.
 
 Seeds come from your pack **or** that base's own chest, matching the pooled-stock rule (6.2), so a base you have been depositing into can be replanted without unpacking anything.
+
+## 7⅚. The Survey lens **[v0.12]**
+
+A cheap personal craftable (2 crystal, 2 ore) revealed once you have stripped half a dozen nodes — you work out the need for it by watching a face run dry. It does three things:
+
+- A **Survey** section in the pack lists every material with what you are holding, how many deposits are still standing **in charted ground**, and how many are still out in the dark.
+- Tapping **Track** puts a screen-edge arrow on the nearest unstripped deposit of that material, with its distance, in the same style as the Relic compass.
+- The **sky chart** marks every unstripped deposit you have charted, coloured by material.
+
+It deliberately only ever points at rock you have **already been to**. Making nodes finite (4.4) created a new standing question — *where is the ore I have not taken yet?* — and there are two very different halves to that: remembering ground you covered, and finding ground you haven't. The lens answers the first and refuses the second, so it removes bookkeeping without removing exploration. It is also the first tool whose value *grows as the world empties*, which is the right shape for a resource economy that only goes one way.
 
 ## 7¾bis. Ziplines **[v0.11]**
 
@@ -324,6 +335,12 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 
 Everything is synthesised with WebAudio — no asset loads, which keeps the whole game a handful of static files. The bed is filtered noise whose level and cutoff track **altitude, airspeed and storms**, so height is audible before it is visible. A sawtooth hum runs only while you are gripping rock and changes pitch by feature (low on a rest ledge, high and thin on slick rock), which makes the climbing state legible without looking. Everything else is short synth blips: grab, jump, land, harvest, scan, craft, discovery, damage, crumble, thunder, beacon. Muted from a HUD toggle, and the preference is saved.
 
+## 9¾. Camera **[v0.9, retuned v0.12]**
+
+The world is framed against a **reference viewport** rather than a fixed zoom, so the same amount of world fits on a phone and a laptop. v0.12 pulled that reference in (380x620, floor 0.75, from 450x750/0.6) — at the old setting the character was small enough that reading a route meant squinting, which was working against the whole point of route features (4.2½). The **Range visor** is a multiplier on the base scale, so it was divided by the same factor: the visor still frames roughly 8000px of sky, it just does it from a closer starting point.
+
+The camera also **leads your velocity** (up to 320px) so you can see what you are flying into.
+
 ## 10. Presentation **[v0.1]**
 
 - Vanilla JS + single `<canvas>`, zero dependencies, static files → GitHub Pages.
@@ -345,8 +362,9 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.8 — Long Night**: day/night cycle, storms with wind and lightning, sleeping at bases, field scanner and 11-entry log, nest robbing, skysteel, Fabricator Mk3, Storm suit, Ascender rig, and the Signal beacon ending.
 - **0.9 — Reading the Rock**: route features on every face, the sky chart with fog of war, discovery-gated recipes, procedural audio, camera look-ahead, a far wider visor, and no ridgerunner on the start island.
 - **0.10 — Thorn and Shale**: rock-blended feature colours, razor shale that cuts, genuinely slippery slick rock, thorn gating cliff tops, the Thorn hook, and a searchable wreck at camp.
-- **0.11 — Cable and Seed** *(current build)*: islands roughly doubled in size, resources no longer respawn, base planters as the renewable economy, motorised two-way ziplines, tameable ridgerunners, and far less thorn on the start island.
-- **0.12 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **0.11 — Cable and Seed**: islands roughly doubled in size, resources no longer respawn, base planters as the renewable economy, motorised two-way ziplines, tameable ridgerunners, and far less thorn on the start island.
+- **0.12 — Stocktake** *(current build)*: the Survey lens (counts and tracks what is left on the rock), deposit markers on the sky chart, and a closer default camera.
+- **0.13 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
 - **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions

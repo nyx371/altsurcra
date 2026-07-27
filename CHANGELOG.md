@@ -2,6 +2,13 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.12.0 — Stocktake (2026-07-27)
+
+- **Survey lens** (2 crystal, 2 ore): a Survey section in the pack counting how much of each material is still standing out in the world
+- Tap **Track** on a material and a screen-edge arrow points to the nearest deposit **you have already charted**, with its distance
+- The sky chart marks every unstripped deposit in charted ground, coloured by material
+- The default camera sits noticeably closer in (reference viewport 380x620, floor 0.75) — the visor was retuned to keep framing the same amount of world
+
 ## v0.11.0 — Cable and Seed (2026-07-27)
 
 - Islands are much larger — the start island is nearly double its old width, and every island in the chain has room to explore

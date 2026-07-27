@@ -86,7 +86,9 @@ const T = {
   medkitHeal: 45,
   thermalLift: -115,      // glide descent inside a thermal (negative = rising)
   thermalLiftWing: -235,  // with the thermal wing fitted
-  visorZoom: 0.17,        // camera scale multiplier while the visor is up
+  // The visor is a multiplier on the base scale, so it is retuned whenever the
+  // default zoom moves — the point is a fixed amount of *world* on screen.
+  visorZoom: 0.136,       // camera scale multiplier while the visor is up
   lookAhead: 0.55,        // how far the camera leads your velocity
   lookAheadMax: 320,
   runnerSpeed: 96,
@@ -615,6 +617,7 @@ const RECIPES = [
   { id: 'jerky',    tier: 'personal', name: 'Lizard ration',     icon: 'gecko',           cost: { lizard: 1 },                       desc: '+35 food. Lizards come back — berry bushes do not.' },
   { id: 'medkit',   tier: 'personal', name: 'Health kit',        icon: 'first-aid-kit',   cost: { fiber: 3, berry: 2 },              desc: '+45 health.' },
   { id: 'scanner',  tier: 'personal', name: 'Field scanner',     icon: 'radar-sweep',     cost: { crystal: 2, fiber: 3 },            desc: 'Hold the hand on anything new to log it.', flag: 'scanner', once: true },
+  { id: 'survey',   tier: 'personal', name: 'Survey lens',       icon: 'metal-detector',  cost: { crystal: 2, ore: 2 },              desc: 'Counts what is left on the rock and points you back to it.', flag: 'survey', once: true },
   { id: 'glider',   tier: 'personal', name: 'Glider',            icon: 'hang-glider',     cost: { fiber: 4, stone: 2 },              desc: 'Hold Jump to glide.', flag: 'glider', once: true },
   { id: 'boots',    tier: 'personal', name: 'Spring boots',      icon: 'boots',           cost: { lizard: 3, fiber: 4, stone: 2 },   desc: 'Double jump.', flag: 'boots', once: true },
   { id: 'pulse',    tier: 'personal', name: 'Glove pulse',       icon: 'spiky-explosion', cost: { crystal: 1, ore: 1 },              desc: 'Tap hand: blast creatures away.', flag: 'pulse', once: true },
@@ -648,6 +651,8 @@ const DISCOVERY = {
   jerky:    () => inv.lizard >= 1,
   medkit:   () => inv.fiber >= 2 && player.hp < 95,
   scanner:  () => inv.crystal >= 1,
+  // you work out the need for a survey lens by watching a face run dry
+  survey:   () => NODES.filter(n => n.spent).length >= 6,
   glider:   () => flags.gloves && inv.fiber >= 3,
   boots:    () => inv.lizard >= 1 || scanned.lizard,
   armor:    () => inv.lizard >= 2,
@@ -721,8 +726,10 @@ const flags = {
   jetpack: false, jetpack2: false, armor: false, visor: false, thermal: false,
   compass: false, relicbat: false,
   scanner: false, mk3: false, stormsuit: false, ascender: false, beacon: false,
+  survey: false,
 };
 let visorOn = false;
+let tracked = null;  // material the survey lens is pointing at
 let jetOn = false;
 // world clock, weather and the field log
 let dayTime = 0.12;          // 0..1 through the day
@@ -2155,6 +2162,7 @@ function craft(recipe, base) {
   if (recipe.id === 'thermal') { flags.thermal = true; toast('Thermal wing — ride the updrafts', 'good', 'windy-stripes'); }
   if (recipe.id === 'cutter') { flags.cutter = true; toast('Thorn hook — the tops are open now', 'good', 'machete'); }
   if (recipe.id === 'scanner') { flags.scanner = true; toast('Scanner online — hold the hand on anything new', 'good', 'radar-sweep'); }
+  if (recipe.id === 'survey') { flags.survey = true; toast('Survey lens — the pack now counts what is left', 'good', 'metal-detector'); }
   if (recipe.id === 'mk3') { if (base) base.mk3 = true; flags.mk3 = true; toast('Fabricator Mk3 online', 'good', 'anvil'); }
   if (recipe.id === 'stormsuit') { flags.stormsuit = true; toast('Storm suit — lightning cannot reach you', 'good', 'chest-armor'); }
   if (recipe.id === 'ascender') { flags.ascender = true; toast('Ascender rig — the wall got shorter', 'good', 'grapple'); }
@@ -2362,6 +2370,7 @@ function saveGame() {
       spent: NODES.map(n => (n.spent ? 1 : 0)),
       ziplines: ziplines.map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 })),
       zipAnchor,
+      tracked,
       tame: runners.map(r => (r.tame ? 1 : 0)),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -2399,6 +2408,7 @@ function loadGame() {
   if (data.spent) NODES.forEach((n, i) => { n.spent = !!data.spent[i]; });
   ziplines = (data.ziplines || []).map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 }));
   zipAnchor = data.zipAnchor || null;
+  tracked = NODE_TYPES[data.tracked] ? data.tracked : null;
   if (data.tame) runners.forEach((r, i) => { r.tame = !!data.tame[i]; });
   if (data.relics) relics.forEach((r, i) => { r.taken = !!data.relics[i]; });
   if (data.brambles) brambles.forEach((b, i) => { b.cutUntil = gameTime + (data.brambles[i] || 0); });
@@ -2535,6 +2545,7 @@ function renderPack() {
   }
   if (!any) grid.innerHTML = '<div class="inv-empty">Empty</div>';
   renderLog();
+  renderSurvey();
 
   const list = document.getElementById('recipe-list');
   list.innerHTML = '';
@@ -2548,6 +2559,70 @@ function renderPack() {
     note.className = 'inv-empty';
     note.textContent = hidden + ' more ' + (hidden === 1 ? 'plan' : 'plans') + ' still to work out.';
     list.appendChild(note);
+  }
+}
+
+// ---------- survey lens ----------
+// Finite nodes turned "where is the ore I have not taken yet" into the game's
+// standing question. The lens answers it from what you have already charted —
+// it is a memory aid for ground you have covered, not a map of ground you have not.
+
+function surveyRemaining(type) {
+  let charted = 0, total = 0;
+  for (const n of NODES) {
+    if (n.type !== type || n.spent) continue;
+    total++;
+    if (cellSeen(n.x, n.y)) charted++;
+  }
+  return { charted, total };
+}
+
+// nearest unspent, already-charted node of a type — what the arrow points at
+function nearestTracked(type) {
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  let best = null, bd = Infinity;
+  for (const n of NODES) {
+    if (n.type !== type || n.spent || !cellSeen(n.x, n.y)) continue;
+    const d = dist(px, py, n.x, n.y);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+
+function trackMaterial(type) {
+  tracked = tracked === type ? null : type;
+  if (tracked && !nearestTracked(tracked)) {
+    toast('No ' + NODE_TYPES[tracked].name.toLowerCase() + ' left on charted rock', 'bad', 'metal-detector');
+  }
+  renderPack();
+  saveGame();
+}
+
+function renderSurvey() {
+  const head = document.getElementById('survey-head');
+  const list = document.getElementById('survey-list');
+  if (!head || !list) return;
+  head.classList.toggle('hidden', !flags.survey);
+  list.classList.toggle('hidden', !flags.survey);
+  if (!flags.survey) return;
+  list.innerHTML = '';
+  for (const [type, def] of Object.entries(NODE_TYPES)) {
+    const { charted, total } = surveyRemaining(type);
+    const held = (inv[def.item] || 0) + bases.reduce((n, b) => n + ((b.store && b.store[def.item]) || 0), 0);
+    const row = document.createElement('div');
+    row.className = 'survey-row' + (tracked === type ? ' tracked' : '') + (charted === 0 ? ' dry' : '');
+    row.innerHTML =
+      '<span class="s-icon">' + svgIcon(def.icon) + '</span>' +
+      '<div class="s-body"><div class="s-name"></div><div class="s-note"></div></div>' +
+      '<button class="mini-btn" type="button"></button>';
+    row.querySelector('.s-name').textContent = def.name;
+    row.querySelector('.s-note').textContent = held + ' on hand · ' + charted +
+      ' still on charted rock' + (total > charted ? ' (' + (total - charted) + ' out in the dark)' : '');
+    const btn = row.querySelector('.mini-btn');
+    btn.textContent = tracked === type ? 'Tracking' : 'Track';
+    btn.disabled = charted === 0 && tracked !== type;
+    btn.addEventListener('click', () => trackMaterial(type));
+    list.appendChild(row);
   }
 }
 
@@ -2800,6 +2875,15 @@ function renderMap() {
     g.beginPath(); g.moveTo(mx(z.x1), my(z.y1)); g.lineTo(mx(z.x2), my(z.y2)); g.stroke();
   }
 
+  // survey lens: what is still on the rock, wherever you have already been
+  if (flags.survey) {
+    for (const n of NODES) {
+      if (n.spent || !cellSeen(n.x, n.y)) continue;
+      const def = NODE_TYPES[n.type];
+      dot(n.x, n.y, def.color, tracked === n.type ? 3.5 : 2);
+    }
+  }
+
   dot(CAMP.x, CAMP.y, '#ffb454', 5);
   for (const b of bases) dot(b.x, b.y, '#8fc7ff', 5);
   for (const rl of relics) {
@@ -2819,6 +2903,7 @@ function renderMap() {
   document.getElementById('map-note').textContent =
     'Charted ' + pct + '% of the islands' +
     (flags.compass ? ' · compass marks every unopened relic' : '') +
+    (flags.survey ? ' · lens marks every deposit still standing' : '') +
     ' · the visor charts further while it is up.';
 }
 
@@ -2941,7 +3026,8 @@ function resize() {
   cw = window.innerWidth; chh = window.innerHeight;
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(chh * dpr);
-  baseScale = Math.max(Math.min(cw / 450, chh / 750), 0.6);
+  // reference viewport the world is framed against — smaller means closer in
+  baseScale = Math.max(Math.min(cw / 380, chh / 620), 0.75);
   scale = baseScale;
 }
 window.addEventListener('resize', resize);
@@ -3451,6 +3537,31 @@ function render() {
     }
   }
 
+  // survey lens: one arrow to the nearest charted deposit of the tracked material
+  if (flags.survey && tracked) {
+    const n = nearestTracked(tracked);
+    if (n) {
+      const def = NODE_TYPES[tracked];
+      const s = w2s(n.x, n.y);
+      const m = 46;
+      const onScreen = s.x > m && s.x < cw - m && s.y > m && s.y < chh - m;
+      const px = clamp(s.x, m, cw - m), py = clamp(s.y, m, chh - m);
+      const far = Math.round(dist(player.x, player.y, n.x, n.y) / 10);
+      ctx.save();
+      ctx.globalAlpha = onScreen ? 0.55 : 0.95;
+      ctx.fillStyle = 'rgba(10,16,36,0.72)';
+      ctx.beginPath(); ctx.arc(px, py, 19, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = def.color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(px, py, 19, 0, Math.PI * 2); ctx.stroke();
+      drawIcon(ctx, def.icon, px, py - 2, 18, def.color);
+      ctx.fillStyle = def.color;
+      ctx.font = '600 9px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(far + 'm', px, py + 15);
+      ctx.restore();
+    }
+  }
+
   // storm: driving gusts across the screen, plus the flash of a strike
   if (storming()) {
     const k = clamp(stormLeft / 6, 0, 1);
@@ -3678,7 +3789,7 @@ document.getElementById('btn-sound').innerHTML = svgIcon(audio.on ? 'sound-on' :
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Cable and Seed', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Stocktake', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -3708,6 +3819,10 @@ window.SKYREACH = {
   get nodeFloor() { return NODE_FLOOR; },
   placeZip, mountZip, dismountZip, toggleZip, nearestZip,
   sowPlot, pickPlot, plotReady, plotProgress, nearestFeedable, placeBase,
+  surveyRemaining, nearestTracked, trackMaterial, renderSurvey,
+  get tracked() { return tracked; },
+  get baseScale() { return baseScale; },
+  get nodeTypes() { return NODE_TYPES; },
   get jetOn() { return jetOn; },
   get dayTime() { return dayTime; }, set dayTime(v) { dayTime = v; },
   get storming() { return stormLeft > 0; },
