@@ -61,8 +61,12 @@ const T = {
   regenGround: 7,
   regenCamp: 30,
   campRadius: 150,
-  glideFall: 135,
-  glideSpeed: 270,
+  // Glider Mk1 is a parachute: it slows the fall and gives you some steering, but
+  // it does not carry you far. The Ridge wing is what turns descent into travel.
+  glideFall: 205,
+  glideSpeed: 205,
+  glideFallWing: 92,      // Ridge wing: much slower drag, so a drop goes a long way
+  glideSpeedWing: 300,
   foodDrain: 0.35,
   starveDps: 2,
   healthRegen: 1.5,
@@ -91,6 +95,26 @@ const T = {
   visorZoom: 0.136,       // camera scale multiplier while the visor is up
   visorPan: 2400,         // world px/s the stick pans the camera while surveying
   visorPanMax: 3400,      // how far from yourself the survey view can wander
+  stingDamage: 10,
+  stingCooldown: 2.2,     // it peels off after a sting and comes round again
+  shieldCost: 5,          // glove energy spent turning a flyer's hit aside
+  shardDamage: 4,
+  shardCooldown: 1.6,
+  // the airship: the endgame vehicle, and the only thing that flies for free
+  shipSpeed: 330,
+  shipAccel: 700,
+  shipHull: 220,
+  shipRepair: 3.5,        // hull/s, always — it is a ship, it has a crew of one
+  shipBoardRange: 110,
+  // the leviathan: a moving no-go zone with a long warning
+  leviWarn: 1500,
+  leviAggro: 900,
+  leviSpeed: 190,
+  leviCharge: 330,
+  leviDamage: 34,
+  leviShipDamage: 26,
+  leviCooldown: 2.4,
+  leviCalm: 26,           // seconds of being left alone before it settles again
   lookAhead: 0.55,        // how far the camera leads your velocity
   lookAheadMax: 320,
   runnerSpeed: 96,
@@ -129,8 +153,8 @@ const T = {
 // `tint` is blended into the host rock's own colour so patches read as part of
 // the cliff rather than stickers on it — the pattern does the identifying.
 const FEATURES = {
-  hold:    { name: 'Handholds',  drain: 0.45, tint: '#8fe08a', mix: 0.34, mark: 'grab' },
-  rest:    { name: 'Rest ledge', drain: 0,    tint: '#9fd0ff', mix: 0.38, mark: 'ladder' },
+  hold:    { name: 'Handholds',  drain: 0.45, tint: '#7fae86', mix: 0.20, mark: 'grab' },
+  rest:    { name: 'Rest ledge', drain: 0,    tint: '#93b4d4', mix: 0.26, mark: 'ladder' },
   slick:   { name: 'Slick rock', drain: 1.35, tint: '#cfe3f2', mix: 0.30, mark: 'windy-stripes', slide: 62 },
   sharp:   { name: 'Razor shale',drain: 1.15, tint: '#ff9a86', mix: 0.30, mark: 'razor-blade', dps: 7 },
   crumble: { name: 'Crumbling',  drain: 1.0,  tint: '#f0b070', mix: 0.30, mark: 'broken-wall' },
@@ -161,11 +185,15 @@ const CODEX = {
   skysteel:  { name: 'Skysteel',     icon: 'metal-bar',       note: 'Only forms where the air thins. The islands are seeded with it.' },
   bramble:   { name: 'Cliff thorn',  icon: 'thorny-vine',     note: 'Roots in the lip of a face and crowds the top. Cut it and it grows back in time.' },
   sharp:     { name: 'Razor shale',  icon: 'razor-blade',     note: 'Splits into blades. It will hold your weight and open your hands doing it.' },
+  grazer:    { name: 'Ledge grazer', icon: 'goat',            note: 'Crops the moss off island tops. Placid, sure-footed, and worth a coat.' },
+  moth:      { name: 'Lantern moth', icon: 'butterfly',       note: 'Drifts the gaps after dark. Its silk is stronger than anything you can weave.' },
+  shardling: { name: 'Shardling',    icon: 'shard-sword',     note: 'Nests in storm rock and comes off it in threes. Each one barely hurts.' },
+  leviathan: { name: 'Skywyrm',      icon: 'sea-serpent',     note: 'Older than the islands. It does not hunt you — you simply get too close.' },
 };
 const CODEX_KEYS = Object.keys(CODEX);
 
 // Relics are deliberately absent: they are exploration trophies, never lost on death.
-const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'egg', 'skysteel', 'basekit', 'zipkit'];
+const RAW_MATERIALS = ['berry', 'ration', 'medkit', 'fiber', 'stone', 'ore', 'crystal', 'lizard', 'skyfish', 'egg', 'skysteel', 'basekit', 'zipkit', 'hide', 'silk'];
 
 // The sky is gentle for your first few falls; after that every death costs you a cut.
 const FREE_DEATHS = 4;
@@ -215,6 +243,8 @@ const GEN_SPAN = 9600; // how wide generation is allowed to spread
 
 let rocks = [], NODES = [], stingwings = [], razorbeaks = [], lizards = [], skyfish = [];
 let thermals = [], runners = [], relics = [];
+let grazers = [], moths = [], shardlings = [];
+let leviathan = null, airship = null;
 let brambles = [], wreck = null;
 let ziplines = [], zipAnchor = null;
 let summit = null;
@@ -294,6 +324,8 @@ function generateWorld(seed) {
 
   rocks = []; NODES = []; stingwings = []; razorbeaks = []; lizards = []; skyfish = [];
   thermals = []; runners = []; relics = []; brambles = []; wreck = null;
+  grazers = []; moths = []; shardlings = [];
+  leviathan = null; airship = null;
   ziplines = []; zipAnchor = null;
 
   const addCliff = (x, y, w, h, type, taper) => {
@@ -327,6 +359,23 @@ function generateWorld(seed) {
       x = farFrom < mid ? R(mid + r.w * 0.15, r.x + r.w - 20) : R(r.x + 20, mid - r.w * 0.15);
     }
     runners.push({ rock: r, x, dir: rnd() < 0.5 ? -1 : 1, mode: 'patrol', cd: 0, t: R(0, 5), tame: false });
+  };
+  // Ledge grazer: placid livestock on island tops. Walks, crops moss, and gives
+  // hide — the material the shield and the airship's envelope are made of.
+  const addGrazer = (r) => {
+    const x = R(r.x + 25, r.x + r.w - 25);
+    grazers.push({ rock: r, x, dir: rnd() < 0.5 ? -1 : 1, t: R(0, 4), goneUntil: 0, spook: 0 });
+  };
+  // Lantern moth: drifts the gaps, brighter at night. Caught by flying through it.
+  const addMoth = (x, y) => {
+    moths.push({ home: { x, y }, x, y, t: R(0, 6), goneUntil: 0 });
+  };
+  // Shardling: storm-rock swarmer. Barely hurts, never stops.
+  const addShardlings = (r, n) => {
+    for (let k = 0; k < n; k++) {
+      const x = R(r.x, r.x + r.w), y = R(r.y + 40, r.y + r.h - 40);
+      shardlings.push({ home: { x, y }, rock: r, x, y, t: R(0, 6), cd: R(0, 2), mode: 'hover' });
+    }
   };
   const ledgeOn = (r) => {
     // a small standable shelf overlapping the face
@@ -375,6 +424,9 @@ function generateWorld(seed) {
     }
     hx += hw + R(90, 170);
   }
+  // a couple of grazers on the home island: the first livestock you meet is calm
+  for (let k = 0; k < RI(2, 3); k++) addGrazer(slab0);
+  for (let k = 0; k < 2; k++) addMoth(sx + startW * R(0.2, 1.0), groundY - R(120, 320));
   while (groundFiber < 5) groundNode('fiber', sx + startW * R(0.2, 0.85), groundY);
   while (groundStone < 5) groundNode('stone', sx + startW * R(0.2, 0.85), groundY);
   groundNode('berry', sx + startW * R(0.55, 0.9), groundY);
@@ -489,6 +541,9 @@ function generateWorld(seed) {
     addLizard(tower);
     if (rnd() < 0.6) addLizard(slab);
     if (rnd() < 0.7) addRunner(slab);
+    if (rnd() < 0.8) addGrazer(slab);
+    for (let k = 0; k < RI(1, 2); k++) addMoth(x + slabW * R(0, 1), slabTop - R(80, 300));
+    if (type === 'stormrock') addShardlings(tower, RI(2, 4));
 
     // a thermal in the gap you just crossed, rising past the new island
     addThermal(dir > 0 ? x - R(60, 190) : x + slabW + R(60, 190),
@@ -562,6 +617,8 @@ function generateWorld(seed) {
     relics.push({ x: Math.round(ox + ow / 2), y: Math.round(oy - 22), taken: false });
     addLizard(island);
     addRunner(island);
+    addGrazer(island);
+    for (let k = 0; k < 2; k++) addMoth(ox + R(0, ow), oy - R(80, 320));
     for (let k = 0; k < 2; k++) addSkyfish(ox + R(-160, ow + 160), oy - R(60, 320));
     // a thermal on the way back, so an outpost is not a one-way trip
     addThermal(goRight ? ox - R(80, 220) : ox + ow + R(80, 220), oy - R(400, 650), oy + 160);
@@ -584,6 +641,17 @@ function generateWorld(seed) {
       faceNode(type, pool[Math.floor(rnd() * pool.length)]);
       have++;
     }
+  }
+
+  // The Skywyrm: one to a world, patrolling the open air above the chain. It is
+  // not a hunter — it is a place you are not allowed to be, and it moves.
+  {
+    const lx = R(sx + startW + 900, sx + startW + 3200);
+    const ly = clamp(groundY - R(900, 1500), WORLD.top + 300, groundY - 500);
+    leviathan = {
+      x: lx, y: ly, home: { x: lx, y: ly },
+      dir: 1, t: 0, mode: 'patrol', cd: 0, calm: 0, warned: false, aggro: 0,
+    };
   }
 
   CORE.left = Math.min(...rocks.map(r => r.x));
@@ -697,6 +765,19 @@ function buildDriftChunk(i) {
     if (rnd() < 0.5) {
       runners.push({ rock: slab, x: R(slab.x + 20, slab.x + w - 20), dir: rnd() < 0.5 ? -1 : 1, mode: 'patrol', cd: 0, t: R(0, 5), tame: false });
     }
+    if (rnd() < 0.7) {
+      grazers.push({ rock: slab, x: R(slab.x + 25, slab.x + w - 25), dir: rnd() < 0.5 ? -1 : 1, t: R(0, 4), goneUntil: 0, spook: 0 });
+    }
+    for (let m = 0; m < RI(1, 2); m++) {
+      const mx2 = cursor + R(-120, w + 120), my2 = y - R(80, 320);
+      moths.push({ home: { x: mx2, y: my2 }, x: mx2, y: my2, t: R(0, 6), goneUntil: 0 });
+    }
+    if (type === 'stormrock') {
+      for (let k = 0; k < RI(2, 4); k++) {
+        const sx2 = R(tower.x, tower.x + tower.w), sy2 = R(tower.y + 40, tower.y + th - 40);
+        shardlings.push({ home: { x: sx2, y: sy2 }, rock: tower, x: sx2, y: sy2, t: R(0, 6), cd: R(0, 2), mode: 'hover' });
+      }
+    }
     if (rnd() < 0.45) {
       const nx = R(tower.x + 25, tower.x + tower.w - 25), ny = R(tower.y + 80, tower.y + th * 0.6);
       stingwings.push({ nest: { x: nx, y: ny }, x: nx, y: ny, mode: 'idle', t: R(0, 6), hitCd: 0, stun: 0, eggs: RI(1, 2), eggBack: 0 });
@@ -744,6 +825,8 @@ const ITEMS = {
   relic:   { name: 'Relic',        icon: 'emerald' },
   basekit: { name: 'Base kit',     icon: 'house',   place: 'base' },
   zipkit:  { name: 'Zipline kit',  icon: 'ropeway', place: 'zip' },
+  hide:    { name: 'Grazer hide',  icon: 'animal-hide' },
+  silk:    { name: 'Moth silk',    icon: 'spider-web' },
 };
 
 const RECIPES = [
@@ -764,6 +847,8 @@ const RECIPES = [
   { id: 'mk2',      tier: 'base',     name: 'Fabricator Mk2',    icon: 'anvil',           cost: { ore: 3, crystal: 2 },              desc: 'Heavy fabrication here.' },
   { id: 'planter',  tier: 'base',     name: 'Planter box',       icon: 'flower-pot',      cost: { stone: 5, fiber: 4 },              desc: 'A bed to sow berries or fiber in. Up to ' + T.plotsPerBase + ' per base.' },
   { id: 'zipkit',   tier: 'mk2',      name: 'Zipline kit',       icon: 'ropeway',         cost: { ore: 4, crystal: 2, fiber: 4 },    desc: 'A powered cable between two anchors. Rides both ways.' },
+  { id: 'glider2',  tier: 'mk2',      name: 'Ridge wing',        icon: 'feathered-wing',  cost: { silk: 4, fiber: 6, crystal: 2 },   desc: 'A real wing: far less drag, so a drop carries you a long way.', flag: 'glider2', once: true, needs: 'glider' },
+  { id: 'shield',   tier: 'mk2',      name: 'Wing shield',       icon: 'bordered-shield', cost: { hide: 3, ore: 4, crystal: 2 },     desc: 'Turns a flyer\u2019s attack aside for a little glove energy.', flag: 'shield', once: true },
   { id: 'thermal',  tier: 'mk2',      name: 'Thermal wing',      icon: 'windy-stripes',   cost: { fiber: 6, crystal: 3, skyfish: 3 }, desc: 'Ride thermals hard. Needs Glider.', flag: 'thermal', once: true, needs: 'glider' },
   { id: 'jetpack',  tier: 'mk2',      name: 'Jetpack',           icon: 'jet-pack',        cost: { ore: 4, crystal: 3, skyfish: 2 },  desc: 'Short burst of lift. Needs Glider.', flag: 'jetpack', once: true, needs: 'glider' },
   { id: 'jetpack2', tier: 'mk2',      name: 'Ripwing jets',      icon: 'thrust',          cost: { ore: 6, crystal: 6, skyfish: 4 },  desc: 'Bigger tank, harder push.', flag: 'jetpack2', once: true, needs: 'jetpack' },
@@ -776,6 +861,7 @@ const RECIPES = [
   { id: 'stormsuit', tier: 'mk3',     name: 'Storm suit',        icon: 'chest-armor',     cost: { skysteel: 5, lizard: 4, ore: 6 },   desc: 'Lightning cannot touch you. Heavy plating.', flag: 'stormsuit', once: true },
   { id: 'ascender', tier: 'mk3',      name: 'Ascender rig',      icon: 'grapple',         cost: { skysteel: 5, crystal: 8, egg: 3 },  desc: 'Climb much faster for less energy.', flag: 'ascender', once: true },
   { id: 'beaconkit', tier: 'mk3',     name: 'Signal beacon',     icon: 'lighthouse',      cost: { skysteel: 6, relic: 2, crystal: 10 }, desc: 'Carry it to the highest rock and answer the sky.', flag: 'beacon', once: true },
+  { id: 'airship',  tier: 'mk3',      name: 'Skyrunner',         icon: 'zeppelin',        cost: { skysteel: 10, hide: 6, silk: 6, ore: 12, crystal: 10 }, desc: 'An airship. Board it and go anywhere. Something out there does not like it.', flag: 'airship', once: true },
 ];
 
 // A plan becomes available when you have seen the reason for it. This replaces
@@ -811,6 +897,9 @@ const DISCOVERY = {
   stormsuit: () => bases.some(b => b.mk3),
   ascender: () => bases.some(b => b.mk3),
   beaconkit: () => bases.some(b => b.mk3),
+  glider2:  () => flags.glider && inv.silk >= 1,
+  shield:   () => inv.hide >= 1 && (scanned.stingwing || scanned.nightwing),
+  airship:  () => bases.some(b => b.mk3) && inv.skysteel >= 4,
 };
 const touchedRock = {};
 let sawThorn = false;
@@ -856,7 +945,7 @@ const player = {
 
 function maxFuel() { return flags.jetpack2 ? T.jetFuel2 : flags.jetpack ? T.jetFuel1 : 0; }
 
-const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, egg: 0, skysteel: 0, relic: 0, basekit: 0, zipkit: 0 };
+const inv = { berry: 0, ration: 0, medkit: 0, fiber: 0, stone: 0, ore: 0, crystal: 0, lizard: 0, skyfish: 0, egg: 0, skysteel: 0, relic: 0, basekit: 0, zipkit: 0, hide: 0, silk: 0 };
 const flags = {
   gloves: false, glider: false, boots: false, pulse: false, cutter: false,
   battery1: false, battery2: false, spikes: false, magnets: false,
@@ -864,6 +953,7 @@ const flags = {
   compass: false, relicbat: false,
   scanner: false, mk3: false, stormsuit: false, ascender: false, beacon: false,
   survey: false,
+  glider2: false, shield: false, airship: false,
 };
 let visorOn = false;
 let panX = 0, panY = 0;   // survey-view camera offset while the visor is up
@@ -889,6 +979,7 @@ let gameTime = 0;
 let pulseFx = null;  // {x, y, t}
 let jumpFx = null;   // double-jump puff
 let crumbleFx = null;// burst when a hold breaks
+let shieldFx = null; // ring when the wing shield turns a hit
 let gripKind = null; // what the hands are on right now, for HUD + audio
 
 let clouds = [];
@@ -966,6 +1057,9 @@ const SFX = {
   thunder:  { f: 90,  to: 32,   d: 0.85, type: 'sawtooth', g: 0.30 },
   beacon:   { f: 330, to: 660,  d: 0.9,  type: 'sine',     g: 0.22 },
   pulse:    { f: 700, to: 140,  d: 0.26, type: 'square',   g: 0.18 },
+  block:    { f: 900, to: 380,  d: 0.16, type: 'square',   g: 0.16 },
+  roar:     { f: 70,  to: 26,   d: 1.5,  type: 'sawtooth', g: 0.30 },
+  board:    { f: 200, to: 420,  d: 0.35, type: 'triangle', g: 0.18 },
   zip:      { f: 260, to: 1150, d: 0.30, type: 'sawtooth', g: 0.13 },
   sow:      { f: 300, to: 480,  d: 0.22, type: 'triangle', g: 0.13 },
   tame:     { f: 240, to: 430,  d: 0.36, type: 'sine',     g: 0.18 },
@@ -1085,6 +1179,7 @@ const btnRelease = document.getElementById('btn-release');
 const btnVisor = document.getElementById('btn-visor');
 const btnZip = document.getElementById('btn-zip');
 const btnFeed = document.getElementById('btn-feed');
+const btnShip = document.getElementById('btn-ship');
 
 function bindHold(el, prop) {
   el.addEventListener('pointerdown', e => {
@@ -1126,6 +1221,7 @@ btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBa
 btnRelease.addEventListener('click', releaseClimb);
 btnVisor.addEventListener('click', toggleVisor);
 btnZip.addEventListener('click', toggleZip);
+btnShip.addEventListener('click', () => { if (player.state === 'ship') leaveShip(); else boardShip(); });
 
 function toggleVisor() {
   if (!flags.visor) return;
@@ -1144,6 +1240,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyQ') releaseClimb();
   if (e.code === 'KeyV') toggleVisor();
   if (e.code === 'KeyZ') toggleZip();
+  if (e.code === 'KeyB') { if (player.state === 'ship') leaveShip(); else boardShip(); }
   if (e.code === 'KeyF') { btnState.feed = true; setTimeout(() => { btnState.feed = false; }, T.feedTime * 1000 + 120); }
   if (e.code === 'KeyM') { renderMap(); openOverlay('overlay-map'); }
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleJet();
@@ -1183,6 +1280,8 @@ function pollInput(dt) {
 function visorPanning() {
   return visorOn && flags.visor && (player.state === 'ground' || player.state === 'climb');
 }
+// the ship is its own vehicle: the stick flies it, never the camera
+
 
 // ---------- physics ----------
 
@@ -1483,6 +1582,12 @@ function updatePlayer(dt) {
   player.invuln = Math.max(0, player.invuln - dt);
   if (input.x !== 0) player.faceDir = input.x > 0 ? 1 : -1;
 
+  // aboard the airship, updateAirship drives everything
+  if (player.state === 'ship') {
+    if (!airship || !airship.piloted) player.state = 'air';
+    return;
+  }
+
   // riding a cable: the motor does the work, the stick picks the direction
   if (player.state === 'zip' && player.zip) {
     const z = player.zip.line;
@@ -1609,8 +1714,9 @@ function updatePlayer(dt) {
     if (player.state === 'ground' && !standingOn()) player.state = 'air';
   } else {
     // air control
+    const airTop = flags.glider2 ? T.glideSpeedWing : T.glideSpeed;
     player.vx += input.x * 900 * dt;
-    player.vx = clamp(player.vx, -T.glideSpeed, T.glideSpeed);
+    player.vx = clamp(player.vx, -airTop, airTop);
     if (input.x === 0) player.vx *= Math.pow(0.35, dt);
 
     // boots: one extra jump in mid-air
@@ -1626,7 +1732,7 @@ function updatePlayer(dt) {
       if (!input.jumpHeld || !flags.glider || thrusting) player.state = 'air';
       else {
         // rising air turns a glide into a climb — the only way up that costs nothing
-        let lift = T.glideFall;
+        let lift = flags.glider2 ? T.glideFallWing : T.glideFall;
         if (inThermal()) {
           lift = flags.thermal ? T.thermalLiftWing : T.thermalLift;
           // sun-warmed rock drives thermals: weak at night, violent in a storm
@@ -1640,7 +1746,7 @@ function updatePlayer(dt) {
       player.vy = Math.min(player.vy, T.maxFall);
       if (flags.glider && input.jumpHeld && !thrusting && player.vy > -60 && player.detachTimer <= 0) {
         player.state = 'glide';
-        player.vy = Math.min(player.vy, T.glideFall + 120);
+        player.vy = Math.min(player.vy, (flags.glider2 ? T.glideFallWing : T.glideFall) + 120);
       }
     }
 
@@ -1751,6 +1857,19 @@ function updateVitals(dt) {
   if (player.y > WORLD.kill) die('You fell into the cloud sea');
 }
 
+// The Wing shield turns a flying attack aside for a little glove energy. It is
+// not armour: it costs the same resource climbing does, so being harassed on a
+// wall still spends your margin — it just no longer spends your health.
+function blockedByShield(why) {
+  if (!flags.shield || player.energy < T.shieldCost) return false;
+  player.energy -= T.shieldCost;
+  shieldFx = { x: player.x + P_W / 2, y: player.y + P_H / 2, t: 0 };
+  sfx('block');
+  if (gameTime - shieldToastAt > 6) { shieldToastAt = gameTime; toast(why + ' — shield held', 'good', 'bordered-shield'); }
+  return true;
+}
+let shieldToastAt = -99;
+
 // Continuous environmental damage: no invulnerability window (it would make a
 // per-second effect meaningless) but armour still counts.
 function bleed(dmg, cause) {
@@ -1790,6 +1909,10 @@ function scanTarget() {
   for (const w of stingwings) if (near(w.x, w.y, 150)) return 'stingwing';
   for (const b of razorbeaks) if (near(b.x, b.y, 170)) return 'nightwing';
   for (const rr of runners) if (near(rr.x, rr.rock.y - 18, 150)) return 'runner';
+  for (const g of grazers) if (gameTime < g.goneUntil ? false : near(g.x, g.rock.y - 18, 130)) return 'grazer';
+  for (const m of moths) if (gameTime < m.goneUntil ? false : near(m.x, m.y, 130)) return 'moth';
+  for (const sh of shardlings) if (near(sh.x, sh.y, 150)) return 'shardling';
+  if (leviathan && near(leviathan.x, leviathan.y, 900)) return 'leviathan';
   for (const rl of relics) if (near(rl.x, rl.y, 120)) return 'relic';
   // thorn is worth logging once, then it stops hijacking the scanner
   if (!scanned.bramble && nearestBramble()) return 'bramble';
@@ -1875,7 +1998,13 @@ function nearestCritter() {
   for (const l of lizards) {
     if (gameTime < l.goneUntil) continue;
     const d = dist(px, py, l.x, l.y);
-    if (d < bd) { bd = d; best = { c: l, item: 'lizard' }; }
+    if (d < bd) { bd = d; best = { c: l, item: 'lizard', x: l.x, y: l.y }; }
+  }
+  for (const g of grazers) {
+    if (gameTime < g.goneUntil) continue;
+    const gy = g.rock.y - 18;
+    const d = dist(px, py, g.x, gy);
+    if (d < bd) { bd = d; best = { c: g, item: 'hide', x: g.x, y: gy }; }
   }
   return best;
 }
@@ -1905,6 +2034,7 @@ function threatInRange(radius) {
   for (const w of stingwings) if (dist(px, py, w.x, w.y) < radius) return true;
   for (const b of razorbeaks) if (dist(px, py, b.x, b.y) < radius) return true;
   for (const r of runners) if (dist(px, py, r.x, r.rock.y - 18) < radius) return true;
+  for (const sh of shardlings) if (dist(px, py, sh.x, sh.y) < radius) return true;
   return false;
 }
 
@@ -1925,15 +2055,31 @@ function firePulse() {
       r.mode = 'patrol'; r.cd = 4; r.dir = r.x < px ? -1 : 1;
     }
   }
+  for (const sh of shardlings) {
+    if (dist(px, py, sh.x, sh.y) < T.pulseRadius) {
+      sh.mode = 'hover'; sh.cd = 3;
+      sh.home = { x: sh.x + (sh.x < px ? -140 : 140), y: sh.y - 70 };
+    }
+  }
 }
 
 function updateInteraction(dt) {
+  // Aboard the ship there is nothing within arm's reach but the helm.
+  if (player.state === 'ship') {
+    player.harvest = null;
+    player.feeding = null;
+    for (const b of [btnInteract, btnBase, btnJet, btnRelease, btnVisor, btnFeed, btnZip]) b.classList.add('hidden');
+    btnShip.classList.remove('hidden');
+    btnShip.classList.add('on');
+    return;
+  }
+  btnInteract.classList.remove('hidden');
   // Nodes and lizards share the same faces — reach for whichever is actually closer.
   const pc = playerCenter();
   let node = nearestNode();
   let critter = nearestCritter();
   if (node && critter) {
-    if (dist(pc.x, pc.y, critter.c.x, critter.c.y) < dist(pc.x, pc.y, node.x, node.y)) node = null;
+    if (dist(pc.x, pc.y, critter.x, critter.y) < dist(pc.x, pc.y, node.x, node.y)) node = null;
     else critter = null;
   }
   const relic = nearestRelic();
@@ -2009,7 +2155,7 @@ function updateInteraction(dt) {
     if (player.harvest.t >= T.captureTime) {
       inv[critter.item] += 1;
       critter.c.goneUntil = gameTime + T.critterRespawn;
-      autoLog(critter.item === 'lizard' ? 'lizard' : 'skyfish');
+      autoLog(critter.item === 'lizard' ? 'lizard' : critter.item === 'hide' ? 'grazer' : 'skyfish');
       checkDiscoveries();
       player.harvest = null;
       toast('Caught a ' + ITEMS[critter.item].name.toLowerCase(), 'good', ITEMS[critter.item].icon);
@@ -2083,6 +2229,9 @@ function updateInteraction(dt) {
   const onZip = player.state === 'zip';
   btnZip.classList.toggle('hidden', !onZip && !nearestZip());
   btnZip.classList.toggle('on', onZip);
+  const onShip = player.state === 'ship';
+  btnShip.classList.toggle('hidden', !onShip && !nearShip());
+  btnShip.classList.toggle('on', onShip);
 }
 
 // ---------- creatures ----------
@@ -2120,10 +2269,21 @@ function updateStingwings(dt) {
       w.y += Math.sin(ang) * 170 * dt;
       if (dToPlayer > 420 || deathCause) w.mode = 'return';
       if (dToPlayer < 28 && w.hitCd <= 0) {
-        w.hitCd = 1.2;
-        hurt(12, 'Stung out of the sky');
-        knockOffWall(pc.x > w.x ? 1 : -1);
+        // A sting, then it peels off and comes round again. It used to knock you
+        // off the wall, which made one bad approach cost a whole climb — the
+        // creature was deciding the outcome instead of pressuring your decision.
+        w.hitCd = T.stingCooldown;
+        if (!blockedByShield('Stung on the wall')) hurt(T.stingDamage, 'Stung off the rock');
+        w.mode = 'peel';
+        w.peelT = 0;
+        w.peelDir = pc.x > w.x ? -1 : 1;
       }
+    } else if (w.mode === 'peel') {
+      // backs off to a holding distance, then dives again
+      w.peelT += dt;
+      w.x += w.peelDir * 150 * dt;
+      w.y -= 60 * dt;
+      if (w.peelT > T.stingCooldown * 0.8) w.mode = dToPlayer < 420 ? 'chase' : 'return';
     } else {
       const ang = Math.atan2(w.nest.y - w.y, w.nest.x - w.x);
       w.x += Math.cos(ang) * 130 * dt;
@@ -2158,7 +2318,7 @@ function updateRazorbeaks(dt) {
       b.x += b.vx * dt; b.y += b.vy * dt;
       b.dir = b.vx > 0 ? 1 : -1;
       if (dToPlayer < 30) {
-        hurt(15, 'Torn from the wind by a nightwing');
+        if (!blockedByShield('Nightwing dive')) hurt(15, 'Torn from the wind by a nightwing');
         player.vy += 260; player.vx += b.dir * 160;
         b.mode = 'rise'; b.cd = 2.5;
       } else if (b.swoopT > 2.6 || !airborne) { b.mode = 'rise'; b.cd = 1.5; }
@@ -2257,6 +2417,246 @@ function updateRunners(dt) {
       }
     }
   }
+}
+
+// --- the new fauna ---
+
+// Ledge grazer: ambles the top of its island, shies away if you crowd it, and
+// gives hide when caught. It is the calmest thing in the sky and it is livestock.
+function updateGrazers(dt) {
+  const pc = playerCenter();
+  for (const g of grazers) {
+    if (gameTime < g.goneUntil) continue;
+    const r = g.rock;
+    if (!inSim(g.x, r.y)) continue;
+    g.t -= dt;
+    g.spook = Math.max(0, g.spook - dt);
+    const d = Math.abs(pc.x - g.x);
+    const sameTop = Math.abs(pc.y + P_H / 2 - (r.y - 16)) < 90;
+    // A short dash, not a rout: it must still be inside your reach when it stops,
+    // or a grazer would be uncatchable the way an early lizard nearly was. It
+    // only re-spooks once the last dash is spent, and never once you have a hand
+    // on it.
+    // A reaching hand settles it: the dash is for when you wander past, not for
+    // when you have deliberately committed to catching one.
+    if (sameTop && d < 40 && g.spook <= 0 && !input.interactHeld &&
+        !(player.harvest && player.harvest.critter === g)) {
+      g.spook = 0.45;
+      g.dir = pc.x > g.x ? -1 : 1;
+    }
+    const sp = g.spook > 0 ? 85 : 42;
+    if (g.spook > 0 || g.t <= 0) {
+      if (g.t <= 0) { g.t = 2 + Math.random() * 4; if (Math.random() < 0.4) g.dir = -g.dir; }
+      g.x += g.dir * sp * dt;
+    }
+    if (g.x < r.x + 16) { g.x = r.x + 16; g.dir = 1; }
+    if (g.x > r.x + r.w - 16) { g.x = r.x + r.w - 16; g.dir = -1; }
+  }
+}
+
+// Lantern moth: drifts the gaps, glows after dark, and is caught the way trout
+// are — by flying through it. Its silk is what the Ridge wing is stitched from.
+function updateMoths(dt) {
+  const pc = playerCenter();
+  for (const m of moths) {
+    if (gameTime < m.goneUntil) continue;
+    if (!inSim(m.x, m.y)) continue;
+    m.t += dt;
+    m.x = m.home.x + Math.sin(m.t * 0.7) * 70 + Math.sin(m.t * 2.3) * 12;
+    m.y = m.home.y + Math.cos(m.t * 0.9) * 46 + Math.sin(m.t * 3.1) * 8;
+    if (dist(m.x, m.y, pc.x, pc.y) < 34) {
+      m.goneUntil = gameTime + T.critterRespawn;
+      inv.silk += 1;
+      autoLog('moth');
+      toast('+1 moth silk', 'good', 'spider-web');
+      sfx('harvest');
+      checkDiscoveries();
+      saveGame();
+    }
+  }
+}
+
+// Shardling: a storm-rock swarmer. One is nothing; four while you are hanging on
+// razor shale with a quarter of a battery is a decision.
+function updateShardlings(dt) {
+  const pc = playerCenter();
+  for (const sh of shardlings) {
+    if (!inSim(sh.x, sh.y)) continue;
+    sh.t += dt;
+    sh.cd = Math.max(0, sh.cd - dt);
+    const d = dist(sh.x, sh.y, pc.x, pc.y);
+    if (sh.mode === 'hover') {
+      sh.x = sh.home.x + Math.sin(sh.t * 1.9) * 26;
+      sh.y = sh.home.y + Math.cos(sh.t * 2.4) * 20;
+      if (d < 230 && !deathCause) sh.mode = 'dive';
+    } else {
+      const ang = Math.atan2(pc.y - sh.y, pc.x - sh.x);
+      sh.x += Math.cos(ang) * 250 * dt;
+      sh.y += Math.sin(ang) * 250 * dt;
+      if (d > 460 || deathCause) sh.mode = 'hover';
+      if (d < 24 && sh.cd <= 0) {
+        sh.cd = T.shardCooldown;
+        if (!blockedByShield('Shardling')) hurt(T.shardDamage, 'Cut down by shardlings');
+        sh.mode = 'hover';
+        sh.home = { x: sh.x + (pc.x > sh.x ? -90 : 90), y: sh.y - 60 };
+      }
+    }
+  }
+}
+
+// --- the Skywyrm ---
+// A moving exclusion zone with a long fuse. It never seeks you out: it patrols,
+// and if you or your airship come inside its space it warns you, then commits.
+// The whole design is that it is avoidable and that avoiding it is your job.
+function leviTarget() {
+  // it goes for the ship if you are flying it, otherwise for you
+  if (airship && airship.piloted) return { x: airship.x, y: airship.y, ship: true };
+  return { x: player.x + P_W / 2, y: player.y + P_H / 2, ship: false };
+}
+
+function updateLeviathan(dt) {
+  const lv = leviathan;
+  if (!lv) return;
+  lv.t += dt;
+  lv.cd = Math.max(0, lv.cd - dt);
+  const tg = leviTarget();
+  const d = dist(lv.x, lv.y, tg.x, tg.y);
+  lv.aggro = lv.mode === 'hunt' ? 1 : 0;
+
+  if (lv.mode === 'patrol') {
+    // a slow figure-of-eight around its home, so its territory has a shape
+    lv.x = lv.home.x + Math.sin(lv.t * 0.11) * 900;
+    lv.y = lv.home.y + Math.sin(lv.t * 0.19) * 260;
+    lv.dir = Math.cos(lv.t * 0.11) > 0 ? 1 : -1;
+    if (d < T.leviWarn && !lv.warned && !deathCause) {
+      lv.warned = true;
+      toast('Something enormous has noticed you', 'bad', 'sea-serpent');
+      sfx('roar');
+      autoLog('leviathan');
+    }
+    if (d > T.leviWarn * 1.4) lv.warned = false;
+    if (d < T.leviAggro && !deathCause) {
+      lv.mode = 'hunt';
+      lv.calm = T.leviCalm;
+      toast('The Skywyrm is coming — get away from it', 'bad', 'sea-serpent');
+      sfx('roar');
+      autoLog('leviathan');
+    }
+  } else {
+    // hunt: closes at speed, but gives up if you put distance between you
+    const ang = Math.atan2(tg.y - lv.y, tg.x - lv.x);
+    const sp = d > 260 ? T.leviCharge : T.leviSpeed;
+    lv.x += Math.cos(ang) * sp * dt;
+    lv.y += Math.sin(ang) * sp * dt;
+    lv.dir = Math.cos(ang) > 0 ? 1 : -1;
+    lv.calm -= dt;
+    if (d > T.leviAggro * 2.2 || lv.calm <= 0 || deathCause) {
+      lv.mode = 'patrol';
+      lv.warned = false;
+      lv.home = { x: lv.x, y: lv.y };
+      lv.t = 0;
+      toast('It has lost interest', 'good', 'sea-serpent');
+    }
+    if (d < 120 && lv.cd <= 0) {
+      lv.cd = T.leviCooldown;
+      if (tg.ship && airship) {
+        airship.hull -= T.leviShipDamage;
+        toast('The hull is taking it — ' + Math.max(0, Math.round(airship.hull)) + ' left', 'bad', 'zeppelin');
+        sfx('hurt');
+        if (airship.hull <= 0) downShip();
+      } else if (!blockedByShield('Skywyrm')) {
+        hurt(T.leviDamage, 'Taken by the Skywyrm');
+      }
+    }
+  }
+}
+
+// --- the airship ---
+// The endgame vehicle: free flight, no fuel, no energy, no gravity. It is the
+// answer to a world that became endless, and the only thing that can threaten it
+// is the one creature big enough not to care about your gear.
+function buildAirship() {
+  const sp = { x: player.x + P_W / 2, y: player.y - 70 };
+  airship = { x: sp.x, y: sp.y, vx: 0, vy: 0, hull: T.shipHull, piloted: false };
+  toast('Skyrunner built — board it and go', 'good', 'zeppelin');
+  sfx('board');
+  saveGame();
+}
+
+const SHIP_W = 118, SHIP_H = 58;
+
+function nearShip() {
+  if (!airship || airship.piloted) return null;
+  const px = player.x + P_W / 2, py = player.y + P_H / 2;
+  return dist(px, py, airship.x, airship.y) < T.shipBoardRange ? airship : null;
+}
+
+function boardShip() {
+  if (!nearShip()) return;
+  if (player.state === 'climb') detach(true);
+  airship.piloted = true;
+  player.state = 'ship';
+  player.zip = null;
+  player.harvest = null;
+  player.vx = 0; player.vy = 0;
+  jetOff();
+  sfx('board');
+  toast('Aboard the Skyrunner', 'good', 'zeppelin');
+  saveGame();
+}
+
+function leaveShip() {
+  if (!airship || !airship.piloted) return;
+  airship.piloted = false;
+  player.state = 'air';
+  player.x = airship.x - P_W / 2;
+  player.y = airship.y + SHIP_H / 2;
+  player.vx = airship.vx * 0.5;
+  player.vy = 0;
+  player.detachTimer = 0.15;
+  sfx('board');
+  saveGame();
+}
+
+// hull gone: you are thrown clear and the ship falls to the nearest deck below,
+// where it sits and mends itself. Losing it is a setback, never a dead end.
+function downShip() {
+  if (!airship) return;
+  const wasPiloted = airship.piloted;
+  if (wasPiloted) leaveShip();
+  airship.hull = 1;
+  let best = null;
+  for (const r of rocks) {
+    if (r.x > airship.x || r.x + r.w < airship.x) continue;
+    if (r.y < airship.y) continue;
+    if (!best || r.y < best.y) best = r;
+  }
+  if (best) { airship.x = clamp(airship.x, best.x + 40, best.x + best.w - 40); airship.y = best.y - SHIP_H / 2 - 4; }
+  airship.vx = 0; airship.vy = 0;
+  toast('The Skyrunner is down — it will mend where it landed', 'bad', 'zeppelin');
+  sfx('crumble');
+  saveGame();
+}
+
+function updateAirship(dt) {
+  if (!airship) return;
+  airship.hull = Math.min(T.shipHull, airship.hull + T.shipRepair * dt);
+  if (!airship.piloted) { airship.vx *= Math.pow(0.2, dt); airship.vy *= Math.pow(0.2, dt); return; }
+
+  // free flight: no gravity, no fuel, no glove energy. The cost was the build.
+  airship.vx += input.x * T.shipAccel * dt;
+  airship.vy += input.y * T.shipAccel * dt;
+  if (input.x === 0) airship.vx *= Math.pow(0.12, dt);
+  if (input.y === 0) airship.vy *= Math.pow(0.12, dt);
+  const sp = Math.hypot(airship.vx, airship.vy);
+  if (sp > T.shipSpeed) { airship.vx = airship.vx / sp * T.shipSpeed; airship.vy = airship.vy / sp * T.shipSpeed; }
+  airship.x = clamp(airship.x + airship.vx * dt, WORLD.left, WORLD.right);
+  airship.y = clamp(airship.y + airship.vy * dt, WORLD.top + 60, WORLD.cloudSea - 120);
+  // you ride inside it, so everything that tracks the player tracks the ship
+  player.x = airship.x - P_W / 2;
+  player.y = airship.y - P_H / 2;
+  player.vx = airship.vx; player.vy = airship.vy;
+  if (input.jumpPressed) leaveShip();
 }
 
 function updateLizards(dt) {
@@ -2359,6 +2759,9 @@ function craft(recipe, base) {
   if (recipe.id === 'jetpack2') { flags.jetpack2 = true; player.fuel = maxFuel(); toast('Ripwing jets — bigger tank', 'good', 'thrust'); }
   if (recipe.id === 'visor') { flags.visor = true; toast('Range visor — tap to look far', 'good', 'binoculars'); }
   if (recipe.id === 'thermal') { flags.thermal = true; toast('Thermal wing — ride the updrafts', 'good', 'windy-stripes'); }
+  if (recipe.id === 'glider2') { flags.glider2 = true; toast('Ridge wing — the sky just got smaller', 'good', 'feathered-wing'); }
+  if (recipe.id === 'shield') { flags.shield = true; toast('Wing shield — flyers bounce off it now', 'good', 'bordered-shield'); }
+  if (recipe.id === 'airship') { flags.airship = true; buildAirship(); }
   if (recipe.id === 'cutter') { flags.cutter = true; toast('Thorn hook — the tops are open now', 'good', 'machete'); }
   if (recipe.id === 'scanner') { flags.scanner = true; toast('Scanner online — everything you touch logs itself', 'good', 'radar-sweep'); }
   if (recipe.id === 'survey') { flags.survey = true; toast('Survey lens — the pack now counts what is left', 'good', 'metal-detector'); }
@@ -2368,7 +2771,7 @@ function craft(recipe, base) {
   if (recipe.id === 'beaconkit') { flags.beacon = true; toast('Beacon built — take it to the highest rock', 'good', 'lighthouse'); }
   if (recipe.id === 'compass') { flags.compass = true; toast('Relic compass — unfound relics now show', 'good', 'compass'); }
   if (recipe.id === 'relicbat') { flags.relicbat = true; player.maxEnergy = 320; player.energy = 320; toast('Relic core — 320 energy', 'good', 'emerald'); }
-  if (recipe.id === 'glider') { flags.glider = true; toast('Glider fabricated', 'good', 'hang-glider'); }
+  if (recipe.id === 'glider') { flags.glider = true; toast('Parachute rigged — hold Jump to slow your fall', 'good', 'parachute'); }
   if (recipe.id === 'pulse') { flags.pulse = true; toast('Glove pulse armed', 'good', 'spiky-explosion'); }
   if (recipe.id === 'spikes') { flags.spikes = true; toast('Grip spikes fitted', 'good', 'spikes'); }
   if (recipe.id === 'magnets') { flags.magnets = true; toast('Resonant magnets fitted', 'good', 'magnet'); }
@@ -2571,6 +2974,10 @@ function saveGame() {
       zipAnchor,
       tracked,
       drift: driftChunks.slice(),
+      grazers: grazers.map(g => Math.max(0, g.goneUntil - gameTime)),
+      moths: moths.map(m => Math.max(0, m.goneUntil - gameTime)),
+      ship: airship ? { x: airship.x, y: airship.y, hull: airship.hull } : null,
+      levi: leviathan ? { x: leviathan.x, y: leviathan.y, hx: leviathan.home.x, hy: leviathan.home.y, t: leviathan.t } : null,
       tame: runners.map(r => (r.tame ? 1 : 0)),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -2614,6 +3021,18 @@ function loadGame() {
   zipAnchor = data.zipAnchor || null;
   tracked = NODE_TYPES[data.tracked] ? data.tracked : null;
   if (data.tame) runners.forEach((r, i) => { r.tame = !!data.tame[i]; });
+  if (data.grazers) grazers.forEach((g, i) => { g.goneUntil = gameTime + (data.grazers[i] || 0); });
+  if (data.moths) moths.forEach((m, i) => { m.goneUntil = gameTime + (data.moths[i] || 0); });
+  if (data.ship && flags.airship) {
+    airship = { x: data.ship.x, y: data.ship.y, vx: 0, vy: 0, hull: data.ship.hull || T.shipHull, piloted: false };
+  } else if (flags.airship && !airship) {
+    airship = { x: player.x, y: player.y - 70, vx: 0, vy: 0, hull: T.shipHull, piloted: false };
+  }
+  if (data.levi && leviathan) {
+    leviathan.x = data.levi.x; leviathan.y = data.levi.y;
+    leviathan.home = { x: data.levi.hx, y: data.levi.hy };
+    leviathan.t = data.levi.t || 0;
+  }
   if (data.relics) relics.forEach((r, i) => { r.taken = !!data.relics[i]; });
   if (data.brambles) brambles.forEach((b, i) => { b.cutUntil = gameTime + (data.brambles[i] || 0); });
   if (wreck) wreck.searched = !!data.wreck;
@@ -2682,6 +3101,35 @@ function costHTML(recipe) {
     const fromStore = have > (inv[k] || 0) ? ' title="includes nearby base storage"' : '';
     return '<span class="' + lack + '"' + fromStore + '><span class="c-icon">' + svgIcon(ITEMS[k].icon) + '</span>' + have + '/' + v + '</span>';
   }).join('');
+}
+
+// A built one-off is a fact, not a choice — it does not need a row with a cost
+// breakdown and a dead button. Collapsing them keeps the scrollable list to
+// things you could actually make.
+function builtChip(recipe) {
+  const el = document.createElement('span');
+  el.className = 'built-chip';
+  el.innerHTML = '<span class="bc-icon">' + svgIcon(recipe.icon) + '</span><span></span>';
+  el.lastChild.textContent = recipe.name;
+  return el;
+}
+
+function appendRecipes(list, recipes, base) {
+  const built = [];
+  for (const r of recipes) {
+    if (r.once && flags[r.flag]) { built.push(r); continue; }
+    list.appendChild(recipeRow(r, base));
+  }
+  if (built.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'built-row';
+    const label = document.createElement('span');
+    label.className = 'built-label';
+    label.textContent = 'Built';
+    wrap.appendChild(label);
+    for (const r of built) wrap.appendChild(builtChip(r));
+    list.appendChild(wrap);
+  }
 }
 
 function recipeRow(recipe, base) {
@@ -2754,7 +3202,7 @@ function renderPack() {
   const list = document.getElementById('recipe-list');
   list.innerHTML = '';
   const personal = RECIPES.filter(r => r.tier === 'personal' && known[r.id]);
-  for (const r of personal) list.appendChild(recipeRow(r));
+  appendRecipes(list, personal);
   const hidden = RECIPES.filter(r => r.tier === 'personal' && !known[r.id]).length;
   if (!personal.length) {
     list.innerHTML = '<div class="inv-empty">No plans yet. Gather things and look at them.</div>';
@@ -2808,6 +3256,8 @@ function renderSurvey() {
   if (!head || !list) return;
   head.classList.toggle('hidden', !flags.survey);
   list.classList.toggle('hidden', !flags.survey);
+  const empty = document.getElementById('survey-empty');
+  if (empty) empty.classList.toggle('hidden', !!flags.survey);
   if (!flags.survey) return;
   list.innerHTML = '';
   for (const [type, def] of Object.entries(NODE_TYPES)) {
@@ -2834,7 +3284,7 @@ function renderSurvey() {
 
 const CHEATS = {
   mats() {
-    for (const id of ['berry', 'fiber', 'stone', 'ore', 'crystal']) inv[id] += 20;
+    for (const id of ['berry', 'fiber', 'stone', 'ore', 'crystal', 'hide', 'silk']) inv[id] += 20;
     toast('+20 of each material', 'good', 'knapsack');
   },
   gear() {
@@ -2884,6 +3334,19 @@ const CHEATS = {
     known.zipkit = true;
     toast('+3 zipline kits', 'good', 'ropeway');
   },
+  ship() {
+    revealAllPlans();
+    flags.airship = true;
+    buildAirship();
+    toast('Skyrunner spawned', 'good', 'zeppelin');
+  },
+  wyrm() {
+    if (!leviathan) return;
+    leviathan.x = player.x + 700; leviathan.y = player.y - 200;
+    leviathan.home = { x: leviathan.x, y: leviathan.y };
+    leviathan.mode = 'patrol'; leviathan.warned = false;
+    toast('Skywyrm brought in close', 'bad', 'sea-serpent');
+  },
   regrow() {
     // put every stripped node back — for testing the world, not for playing it
     for (const n of NODES) n.spent = false;
@@ -2898,6 +3361,45 @@ document.querySelectorAll('[data-cheat]').forEach(btn => {
     saveGame();
   });
 });
+
+// ---------- panel tabs ----------
+// Long panels became a scroll marathon once the fabricator filled up. Tabs live
+// at the bottom, beside the close bar, where the thumb already is.
+const TAB_ICONS = {
+  supplies: 'knapsack', fabricate: 'gear-hammer', survey: 'metal-detector',
+  log: 'open-book', cheats: 'spiky-explosion',
+  storage: 'chest', garden: 'flower-pot', rest: 'bed',
+};
+
+function setupTabs(barId) {
+  const bar = document.getElementById(barId);
+  if (!bar) return;
+  const panel = bar.closest('.panel');
+  for (const btn of bar.querySelectorAll('button')) {
+    const icon = btn.querySelector('.tb-icon');
+    if (icon && TAB_ICONS[btn.dataset.tab]) icon.innerHTML = svgIcon(TAB_ICONS[btn.dataset.tab]);
+    btn.addEventListener('click', () => showTab(panel, bar, btn.dataset.tab));
+  }
+}
+
+function showTab(panel, bar, name) {
+  for (const p of panel.querySelectorAll('.tab-pane')) p.classList.toggle('active', p.dataset.pane === name);
+  for (const b of bar.querySelectorAll('button')) b.classList.toggle('active', b.dataset.tab === name);
+  panel.scrollTop = 0;
+}
+
+setupTabs('pack-tabs');
+setupTabs('base-tabs');
+
+// Playtest/automation helper: jump straight to a tab without hunting for it.
+function openPanelTab(barId, name) {
+  const bar = document.getElementById(barId);
+  if (!bar) return false;
+  const btn = bar.querySelector('[data-tab="' + name + '"]');
+  if (!btn) return false;
+  btn.click();
+  return true;
+}
 
 let openBaseRef = null;
 function openBase(base) {
@@ -2931,15 +3433,12 @@ function renderBase(base) {
 
   const list = document.getElementById('base-recipe-list');
   list.innerHTML = '';
-  for (const r of RECIPES) {
-    if (r.tier !== 'base' || !known[r.id]) continue;
-    if (r.id === 'mk2' && base.mk2) continue;
-    list.appendChild(recipeRow(r, base));
-  }
+  const here = RECIPES.filter(r => r.tier === 'base' && known[r.id] && !(r.id === 'mk2' && base.mk2));
   if (base.mk2) {
-    for (const r of RECIPES) if (r.tier === 'mk2' && known[r.id]) list.appendChild(recipeRow(r, base));
-    if (base.mk3) for (const r of RECIPES) if (r.tier === 'mk3' && known[r.id]) list.appendChild(recipeRow(r, base));
+    here.push(...RECIPES.filter(r => r.tier === 'mk2' && known[r.id]));
+    if (base.mk3) here.push(...RECIPES.filter(r => r.tier === 'mk3' && known[r.id]));
   }
+  appendRecipes(list, here, base);
   if (!list.children.length) list.innerHTML = '<div class="inv-empty">Nothing worked out for this bench yet.</div>';
   const rest = document.getElementById('btn-rest');
   rest.disabled = player.food < 25;
@@ -2955,6 +3454,8 @@ function renderGarden(base) {
   const plots = base.plots || [];
   head.classList.toggle('hidden', plots.length === 0);
   wrap.classList.toggle('hidden', plots.length === 0);
+  const empty = document.getElementById('garden-empty');
+  if (empty) empty.classList.toggle('hidden', plots.length > 0);
   wrap.innerHTML = '';
   if (!plots.length) return;
 
@@ -3165,6 +3666,7 @@ document.querySelector('#btn-release .abtn-icon').innerHTML = svgIcon('falling')
 document.querySelector('#btn-visor .abtn-icon').innerHTML = svgIcon('binoculars');
 document.querySelector('#btn-zip .abtn-icon').innerHTML = svgIcon('ropeway');
 document.querySelector('#btn-feed .abtn-icon').innerHTML = svgIcon('meat');
+document.querySelector('#btn-ship .abtn-icon').innerHTML = svgIcon('zeppelin');
 document.querySelector('#version-badge .badge-icon').innerHTML = svgIcon('mountain-climbing');
 document.getElementById('version-text').textContent = 'v' + GAME_VERSION;
 document.querySelector('#btn-pack .abtn-icon').innerHTML = svgIcon('knapsack');
@@ -3490,6 +3992,37 @@ function render() {
     }
   }
 
+  // ledge grazers crop the island tops
+  for (const g of grazers) {
+    if (gameTime < g.goneUntil) continue;
+    if (!vis(g.x - 24, g.rock.y - 44, 48, 48)) continue;
+    ctx.save();
+    ctx.translate(g.x, g.rock.y - 16 + Math.abs(Math.sin(g.t * 3)) * 1.5);
+    if (g.dir < 0) ctx.scale(-1, 1);
+    drawIcon(ctx, 'goat', 0, 0, 30, g.spook > 0 ? '#e8d7a6' : '#c9b98d');
+    ctx.restore();
+  }
+
+  // lantern moths drift the gaps, and glow after dark
+  for (const m of moths) {
+    if (gameTime < m.goneUntil) continue;
+    if (!vis(m.x - 24, m.y - 24, 48, 48)) continue;
+    const glow = 0.35 + nightAmount() * 0.5 + Math.sin(m.t * 3) * 0.12;
+    ctx.save();
+    ctx.globalAlpha = glow * 0.5;
+    ctx.fillStyle = '#ffe9a8';
+    ctx.beginPath(); ctx.arc(m.x, m.y, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    drawIcon(ctx, 'butterfly', m.x, m.y, 22, '#ffe9a8', 0.9);
+  }
+
+  // shardlings hang off storm rock in little knots
+  for (const sh of shardlings) {
+    if (!vis(sh.x - 18, sh.y - 18, 36, 36)) continue;
+    drawIcon(ctx, 'shard-sword', sh.x, sh.y, sh.mode === 'dive' ? 20 : 16,
+      sh.mode === 'dive' ? '#d7a6ff' : '#9d7fc4', 0.95);
+  }
+
   // ziplines: a taut cable between two bolted anchors
   for (const z of ziplines) {
     ctx.save();
@@ -3576,6 +4109,44 @@ function render() {
   for (const w of stingwings) {
     if (w.eggs > 0 && gameTime > (w.eggBack || 0)) {
       drawIcon(ctx, 'egg-clutch', w.nest.x, w.nest.y + 12, 20, '#f0e2c0', 0.9);
+    }
+  }
+
+  // the Skyrunner
+  if (airship) {
+    const bob = airship.piloted ? 0 : Math.sin(gameTime * 1.4) * 3;
+    if (vis(airship.x - SHIP_W, airship.y - SHIP_H, SHIP_W * 2, SHIP_H * 2)) {
+      ctx.save();
+      ctx.translate(airship.x, airship.y + bob);
+      if (airship.vx < -8) ctx.scale(-1, 1);
+      drawIcon(ctx, 'zeppelin', 0, 0, SHIP_W, airship.hull < T.shipHull * 0.4 ? '#e08a5a' : '#cfe0ff');
+      ctx.restore();
+      // hull bar, but only while it matters
+      if (airship.hull < T.shipHull - 1) {
+        const w = 70, hpct = clamp(airship.hull / T.shipHull, 0, 1);
+        ctx.fillStyle = 'rgba(10,16,36,0.7)';
+        ctx.fillRect(airship.x - w / 2, airship.y - SHIP_H / 2 - 14, w, 5);
+        ctx.fillStyle = hpct < 0.35 ? '#ff5d6c' : '#8fe3ff';
+        ctx.fillRect(airship.x - w / 2, airship.y - SHIP_H / 2 - 14, w * hpct, 5);
+      }
+    }
+  }
+
+  // the Skywyrm: enormous, and it wants you to know where it is
+  if (leviathan) {
+    const lv = leviathan;
+    const hunting = lv.mode === 'hunt';
+    if (vis(lv.x - 220, lv.y - 160, 440, 320)) {
+      ctx.save();
+      ctx.globalAlpha = hunting ? 0.28 : 0.14;
+      ctx.fillStyle = hunting ? '#ff6a6a' : '#9db2d8';
+      ctx.beginPath(); ctx.arc(lv.x, lv.y, hunting ? 230 : 170, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.translate(lv.x, lv.y + Math.sin(gameTime * 0.8) * 12);
+      if (lv.dir < 0) ctx.scale(-1, 1);
+      drawIcon(ctx, 'sea-serpent', 0, 0, 300, hunting ? '#e07a7a' : '#7d8fb5', 0.95);
+      ctx.restore();
     }
   }
 
@@ -3730,6 +4301,33 @@ function render() {
   }
 
   ctx.restore();
+
+  // wing shield: a ring where a hit was turned aside
+  if (shieldFx) {
+    const k = shieldFx.t / 0.4;
+    const sp = w2s(shieldFx.x, shieldFx.y);
+    ctx.save();
+    ctx.globalAlpha = (1 - k) * 0.9;
+    ctx.strokeStyle = '#8fd6ff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(sp.x, sp.y, (22 + k * 26) * scale, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // the Skywyrm always gets a screen-edge marker while it is hunting you
+  if (leviathan && leviathan.mode === 'hunt') {
+    const sp = w2s(leviathan.x, leviathan.y);
+    const m = 46;
+    if (!(sp.x > m && sp.x < cw - m && sp.y > m && sp.y < chh - m)) {
+      const px = clamp(sp.x, m, cw - m), py = clamp(sp.y, m, chh - m);
+      ctx.save();
+      ctx.fillStyle = 'rgba(40,10,16,0.8)';
+      ctx.beginPath(); ctx.arc(px, py, 21, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#ff6a6a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py, 21, 0, Math.PI * 2); ctx.stroke();
+      drawIcon(ctx, 'sea-serpent', px, py, 24, '#ff8a8a');
+      ctx.restore();
+    }
+  }
 
   // relic compass: screen-edge arrows toward relics you have not opened yet
   if (flags.compass) {
@@ -3982,9 +4580,15 @@ function step(dt) {
     updateLizards(dt);
     updateSkyfish(dt);
     updateRunners(dt);
+    updateGrazers(dt);
+    updateMoths(dt);
+    updateShardlings(dt);
+    updateLeviathan(dt);
+    updateAirship(dt);
     if (pulseFx) { pulseFx.t += dt; if (pulseFx.t > 0.45) pulseFx = null; }
     if (jumpFx) { jumpFx.t += dt; if (jumpFx.t > 0.3) jumpFx = null; }
     if (crumbleFx) { crumbleFx.t += dt; if (crumbleFx.t > 0.5) crumbleFx = null; }
+    if (shieldFx) { shieldFx.t += dt; if (shieldFx.t > 0.4) shieldFx = null; }
     for (const c of clouds) {
       c.x += c.v * dt;
       if (c.x - cam.x > CLOUD_SPAN) c.x -= CLOUD_SPAN * 2;
@@ -4014,7 +4618,7 @@ document.getElementById('btn-sound').innerHTML = svgIcon(audio.on ? 'sound-on' :
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — The Drift', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Skyrunner', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -4040,6 +4644,12 @@ window.SKYREACH = {
   get wreck() { return wreck; },
   get ziplines() { return ziplines; },
   get zipAnchor() { return zipAnchor; },
+  get grazers() { return grazers; },
+  get moths() { return moths; },
+  get shardlings() { return shardlings; },
+  get leviathan() { return leviathan; },
+  get airship() { return airship; },
+  boardShip, leaveShip, buildAirship, downShip, nearShip, blockedByShield,
   get driftChunks() { return driftChunks; },
   get core() { return CORE; },
   ensureDrift, buildDriftChunk, chunkIsDrift,
@@ -4048,7 +4658,7 @@ window.SKYREACH = {
   get nodeFloor() { return NODE_FLOOR; },
   placeZip, mountZip, dismountZip, toggleZip, nearestZip,
   sowPlot, pickPlot, plotReady, plotProgress, nearestFeedable, placeBase,
-  autoLog, visorPanning,
+  autoLog, visorPanning, openPanelTab,
   get panX() { return panX; }, get panY() { return panY; },
   surveyRemaining, nearestTracked, trackMaterial, renderSurvey,
   get tracked() { return tracked; },

@@ -1,8 +1,24 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.13.0';
+const GAME_VERSION = '0.14.0';
 
 const CHANGELOG = [
+  {
+    version: '0.14.0',
+    name: 'Skyrunner',
+    date: '2026-07-27',
+    notes: [
+      'Skyrunner (Mk3): a real airship. Board it, fly anywhere with no fuel and no gravity, step off whenever you like',
+      'The Skywyrm patrols the deep sky. It warns you twice before it commits, and it goes for the ship as readily as for you',
+      'The Glider is a parachute now; the Ridge wing is the upgrade that turns a drop into real distance',
+      'Wing shield: turns a flyer\u2019s attack aside for a little glove energy',
+      'Stingwings sting and peel off instead of knocking you off the wall — then they come round again',
+      'Three new creatures: ledge grazers (hide), lantern moths (silk), and shardlings that swarm storm rock',
+      'Tabs at the bottom of the pack and base panels, so nothing needs scrolling to reach',
+      'Info messages moved to the bottom left, left-aligned',
+      'Handholds blend further into the rock they sit on',
+    ],
+  },
   {
     version: '0.13.0',
     name: 'The Drift',

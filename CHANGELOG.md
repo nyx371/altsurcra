@@ -2,6 +2,18 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.14.0 — Skyrunner (2026-07-27)
+
+- **Skyrunner** (Mk3: 10 skysteel, 6 hide, 6 silk, 12 ore, 10 crystal): a real airship. Board it from its own button, fly in any direction with no fuel, no glove energy and no gravity, and step off whenever you like. Take a hit too many and it goes down to the nearest deck and mends itself there — you are never stranded
+- **The Skywyrm**: one to a world, patrolling the deep sky. It warns you at long range, warns you again when it commits, and then hunts — you or your ship, whichever you are flying. Put distance between you and it loses interest
+- **Glider rework**: the Mk1 is a parachute (slow fall, some steering, not much reach). The new **Ridge wing** (4 silk, 6 fiber, 2 crystal) has far less drag and roughly triples the glide ratio
+- **Wing shield** (3 hide, 4 ore, 2 crystal): turns a flying attack aside for a little glove energy. Not armour — it spends the same resource climbing does
+- **Stingwings sting and peel off** instead of shoving you off the wall, then come round for another pass
+- **Three new creatures**: ledge grazers (placid livestock on island tops, catchable for hide), lantern moths (drift the gaps, glow at night, caught by flying through them for silk), and shardlings (storm-rock swarmers, small bites, no let-up)
+- **Tabs at the bottom of the pack and base panels**, pinned beside the close button. Built one-off gear collapses into a chip row so the list you scroll is only what you can still make
+- **Info messages moved to the bottom left**, left-aligned
+- Handholds and rest ledges blend further into the host rock
+
 ## v0.13.0 — The Drift (2026-07-27)
 
 - **The sky no longer ends.** Past either edge of the authored island chain, procedural islands generate as you fly — endlessly, east and west, deterministic from the world seed

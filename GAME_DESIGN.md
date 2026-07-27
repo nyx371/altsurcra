@@ -95,6 +95,17 @@ Your gloves glow the colour of whatever you're gripping, and the glove hum shift
 
 The counterplay is layered: hug the rock (climbing is safe from bolts), wait it out at a base, or gear past it with the Storm suit.
 
+### 4.3⅙ Two kinds of wing **[v0.14]**
+
+The Glider used to be a single item that did everything: it slowed your fall *and* crossed the gaps. That made it the last movement decision you ever needed, and it arrived in the first hour.
+
+It is now two tiers with different jobs:
+
+- **Glider Mk1** is a **parachute** — 205px/s descent, 205px/s of steering. It stops a fall from killing you and lets you pick which ledge you hit. A one-to-one glide ratio does not cross a gap you could not already jump; it just makes falling survivable and steerable.
+- **Ridge wing** (4 silk, 6 fiber, 2 crystal, Mk2 tier) is the **travel** upgrade — 92px/s descent, 300px/s forward, better than a 3:1 ratio. This is the item that turns altitude into distance, and it is deliberately gated behind moth silk, which means gliding at night through the gaps to catch the moths that make it.
+
+The point is that "how do I get across?" stays a live question through the mid-game instead of being answered by the fourth thing you ever build. It also gives thermals (4.3¼) two very different meanings: with a parachute a thermal is the *only* way to gain height in open air, and with the Ridge wing it is a speed multiplier on a route you could already fly.
+
 ### 4.3¼ Thermals **[v0.6]**
 
 Columns of rising air stand in the gaps between islands and beside the summit spike. Glide into one and you **gain** altitude instead of spending it (~115px/s; the **Thermal wing** more than doubles that). They're drawn as faint updraft motes that go gold when you're inside one.
@@ -180,6 +191,8 @@ Subnautica works because the depths *ask questions*. Ours: intermittent signal p
 | Stone | stone-block | Ledges & faces | Base kit, weights, tools |
 | Iron ore | ore | Band 1 cliff veins | Batteries, tools, Mk2 fabricator |
 | Sky crystal | crystal-growth | Band 1 high faces | Energy tech |
+| Grazer hide **[v0.14]** | animal-hide | Ledge grazers on island tops | Wing shield, airship envelope |
+| Moth silk **[v0.14]** | spider-web | Lantern moths in the gaps, at night | Ridge wing |
 
 ### 6.2 Fabricator tiers
 
@@ -201,6 +214,7 @@ Personal fabricator:
 | Base kit | 6 stone, 4 fiber | Placeable base platform |
 | Lizard ration **[v0.11]** | 1 cliff lizard | Food +35, from a source that respawns |
 | Survey lens **[v0.12]** | 2 crystal, 2 ore | Counts and tracks deposits you have charted |
+| Glider (Mk1) | 4 fiber, 2 stone | A parachute: slow fall with some steering |
 
 Base (at a placed base, with Mk2 built):
 
@@ -209,6 +223,9 @@ Base (at a placed base, with Mk2 built):
 | Fabricator Mk2 | 3 ore, 2 crystal | Unlocks base crafting at that base |
 | Planter box **[v0.11]** | 5 stone, 4 fiber | A growing bed at this base (max 4) |
 | Zipline kit **[v0.11]** | 4 ore, 2 crystal, 4 fiber | A motorised two-way cable between two anchors (Mk2) |
+| Ridge wing **[v0.14]** | 4 silk, 6 fiber, 2 crystal | A real wing: 3:1 glide instead of 1:1 (Mk2) |
+| Wing shield **[v0.14]** | 3 hide, 4 ore, 2 crystal | Blocks a flyer's hit for 5 glove energy (Mk2) |
+| Skyrunner **[v0.14]** | 10 skysteel, 6 hide, 6 silk, 12 ore, 10 crystal | The airship (Mk3) |
 | Glove battery Mk2 | 4 ore, 4 crystal | Max energy → 220 *(teased, craftable in v0.1)* |
 | Thermal wing [later] | TBD | Glider gains rising-air lift |
 | Grapple bolt [later] | TBD | One instant wall-attach from mid-air |
@@ -216,7 +233,7 @@ Base (at a placed base, with Mk2 built):
 ### 6.4 Progression skeleton
 
 Reach is gated by grip, energy ceiling and air tech, not by artificial walls:
-`bare hands (hills only) → search the wreck → Thorn hook → Magnetic gloves → Glider → Spring boots → Field scanner → Survey lens → Range visor → Battery Mk1 → first base + planters → Mk2 → Grip spikes (basalt) → Zipline kit → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Signal beacon`
+`bare hands (hills only) → search the wreck → Thorn hook → Magnetic gloves → Glider (parachute) → Spring boots → Field scanner → Survey lens → Range visor → Battery Mk1 → first base + planters → Mk2 → Grip spikes (basalt) → Wing shield → Ridge wing → Zipline kit → Jetpack → Thermal wing → Scale armor → Battery Mk2 → Ripwing jets → Resonant magnets (storm rock) → skysteel → Fabricator Mk3 → Storm suit / Ascender rig → Skyrunner → Signal beacon`
 
 Three separate ways to gain height now exist and they cost different things: **climbing** spends glove energy, the **jetpack** spends its own fuel, and **thermals** cost nothing but require you to be in the right place. That spread is deliberate — it keeps "how do I get up there?" an interesting question at every tier.
 
@@ -297,6 +314,14 @@ This is the Subnautica databank, and it does three jobs: it gives the open world
 
 **Passive since v0.13.** It used to be a hold-the-hand action on each new thing. That was a button press taxing a discovery you had already made — you had found the creature, identified it by eye, and then had to stand still and confirm it to the game. Worse, it competed with the hand's real jobs and could hijack a harvest. Now the *finding* is the whole interaction, which is where the interest always was, and the log fills in as a record of where you have been rather than a checklist you tick.
 
+## 7⅞. The Skyrunner **[v0.14]**
+
+The airship is the top of the tech tree (10 skysteel, 6 hide, 6 silk, 12 ore, 10 crystal, at a Mk3 bench) and it is the only thing in the game that flies **for free**: no fuel, no glove energy, no gravity, 330px/s in any direction. You board it from its own button when you are in range and step off whenever you like — mid-air, over an island, anywhere.
+
+**Why give the player a vehicle that trivialises travel.** Because by the time you can build it, travel is no longer the interesting problem — the world is endless (5.1½) and finite (4.4), so the question has shifted from *can I get there* to *where is worth going*. A ship makes the drift usable as a place rather than an endurance test, and it is a genuine reward for a build that costs two creatures' worth of farming and a Mk3 bench.
+
+**It is not invulnerable.** The Skywyrm damages the hull rather than you, and at zero the ship goes down: you are thrown clear, and it settles on the nearest deck below and mends itself at 3.5 hull/s. Losing it is a setback and a walk, never a dead end — there is no repair recipe to be short of and no way to be stranded by it.
+
 ## 7¾. Ending a run **[v0.8]**
 
 **Skysteel** only forms on the highest faces. It unlocks **Fabricator Mk3** at a base, which builds the three summit items: **Storm suit** (lightning immunity, heavy damage soak), **Ascender rig** (60% faster climbing at 25% less energy per metre), and the **Signal beacon**.
@@ -309,8 +334,11 @@ Threat design rule: threats attack your *position and energy*, not just your hea
 
 ### 8.1 Current threats
 
-- **Stingwing** (wasp-sting icon): territorial hoverer nesting on cliffs. Chases when you climb into its radius; hits do damage **and knock you off the wall**. Counterplay: route around, bait it out — or **Glove pulse** it.
+- **Stingwing** (wasp-sting icon): territorial hoverer nesting on cliffs. Chases when you climb into its radius, stings, then **peels off and comes round again** on a 2.2s cycle. Counterplay: route around, bait it out, shield it, or **Glove pulse** it.
+
+  *Changed in v0.14:* it used to knock you off the wall. That meant one bad approach cost an entire climb and a full battery — the creature was deciding the outcome rather than pressuring your decisions. A sting that hurts and then backs off keeps the pressure (you are bleeding while you climb, and it will be back in two seconds) while leaving the climb yours to lose.
 - **Nightwing** (bat icon): patrols open sky between islands; dives at gliding players. Counterplay: watch its patrol, time your launch, drop altitude to break the dive — or pulse it mid-dive.
+- **Wing shield [v0.14]**: a craftable that turns a *flying* attack aside completely — stingwing, nightwing, shardling, even the Skywyrm — for 5 glove energy a hit. It is pointedly not armour. Armour reduces damage and costs nothing to wear; the shield removes damage and charges the same resource climbing does, so being harassed on a wall still eats your margin, it just stops eating your health. Below the block cost it simply does not fire, which makes a flat battery dangerous in a new way.
 - **Glove pulse [v0.3]**: a cheap craftable magnetic burst on the hand button. Costs glove energy (the same resource climbing needs), so self-defense on a wall spends your safety margin — defense is a budgeting decision, not a free action.
 
 ### 8.1¼ Ground threat **[v0.6]**
@@ -335,6 +363,20 @@ Both respawn on a timer (90s) at their home spot, so a patch of wall or sky is a
 
 **Design note:** capture is the first mechanic that rewards *stopping* on a wall rather than racing up it, which is exactly the behaviour the cheap idle-hang cost (4.1) was meant to enable.
 
+### 8.1¾ The rest of the sky **[v0.14]**
+
+Three additions, one per niche the world was missing:
+
+- **Ledge grazer** (goat): placid livestock on island tops. Steps back once when you crowd it, then lets you take hold; gives **hide**, which the Wing shield and the airship's envelope are made from. It is the calmest thing up here and it is deliberately the gateway to the two biggest survivability items.
+- **Lantern moth** (butterfly): drifts the gaps and glows after dark. Caught the way trout are, by flying through it, for **silk** — the Ridge wing's material. That puts the best glider in the game behind night flying with the worst glider in the game, which is the sort of bootstrapping this loop should ask for.
+- **Shardling** (shard-sword): storm-rock swarmers in knots of two to four. Four damage a bite on a 1.6s cycle — nothing on its own, and a real problem while you are hanging on razor shale at a quarter battery. They exist because storm rock had hazards but no *company*.
+
+### 8.1⅞ The Skywyrm **[v0.14]**
+
+One to a world. It patrols a slow figure-of-eight over the deep sky and it is not a hunter — it is a **moving exclusion zone**. At 1500px it warns you ("something enormous has noticed you"), at 900px it commits and says so, and then it closes at 330px/s on whichever of you or your airship is flying. Put 2000px between you, or survive 26 seconds, and it loses interest and re-homes wherever it ended up.
+
+Everything about it is built to be *avoidable*. The two-stage warning, the wide aggro radius, the give-up timer and the re-homing all say the same thing: this is terrain, not a boss. The correct play is always to leave, which is why it is the right threat to point at an airship — a vehicle that removes every other movement problem needs one problem it cannot out-fly, and "there is a part of the sky you do not go" is a better answer than nerfing the ship.
+
 ### 8.2 Later
 
 Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band 2 (environmental threat), an apex "leviathan of the sky" whose shadow crossing the sun is the fear beat — the Reaper equivalent. TBD with design input.
@@ -342,7 +384,7 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 ## 9. Controls (mobile) **[v0.1, layout fixed in v0.7]**
 
 - **Left thumb:** virtual joystick — walk, steer climbs, steer glides.
-- **Right thumb:** a **fixed 3x3 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot), **Jump/Glide/Thrust**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left, the **cable** button top-centre and the **feed** button top-left. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
+- **Right thumb:** a **fixed 3x4 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot), **Jump/Glide/Thrust**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left, the **cable** and **feed** buttons on the row above that, and the **board** button top-right. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
 - **One action per button [v0.13].** Feeding moved off the hand and onto its own button, because a hand that harvests, catches, loots, robs *and* feeds has to guess, and guessing wrong costs you a berry or a climb. Anything with a target of its own gets a button of its own.
 - **Vital bars sit above the menus [v0.7]**, with a dark backing while one is open — you decide what to eat or craft *because* of what your health and energy say, so hiding them behind the pack was backwards.
 - Keyboard supported for desktop playtesting: WASD/arrows, Space (jump/hold to glide), E (interact), C (pack).
@@ -351,6 +393,14 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 ## 9½. Sound **[v0.9]**
 
 Everything is synthesised with WebAudio — no asset loads, which keeps the whole game a handful of static files. The bed is filtered noise whose level and cutoff track **altitude, airspeed and storms**, so height is audible before it is visible. A sawtooth hum runs only while you are gripping rock and changes pitch by feature (low on a rest ledge, high and thin on slick rock), which makes the climbing state legible without looking. Everything else is short synth blips: grab, jump, land, harvest, scan, craft, discovery, damage, crumble, thunder, beacon. Muted from a HUD toggle, and the preference is saved.
+
+## 9½. Panels, tabs and messages **[v0.14]**
+
+The pack grew from four recipes to a personal fabricator with fourteen plans, a survey readout, a field log and a cheat row — all in one scrolling column, with the close button at the bottom of it. Reaching the fabricator meant a swipe; reaching the cheats meant three.
+
+Both big panels are now **flex columns with tabs pinned at the bottom**, beside the close bar. Bottom, not top, for the same reason the close bar is: that is where the thumb already is on a phone. Built one-off gear collapses out of the recipe list into a chip row, so the list you scroll is only the list you can still act on, and recipe rows lost a third of their height.
+
+**Info messages moved to the bottom left, left-aligned.** They used to sit centred at 30% height — straight over the part of the screen you are actually looking at while climbing. Bottom-left is the one corner with neither thumb nor action in it, and left-aligning them means a stack of three reads as a log rather than as drifting confetti.
 
 ## 9⅔. Arming, not holding **[v0.13]**
 
@@ -393,8 +443,9 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.10 — Thorn and Shale**: rock-blended feature colours, razor shale that cuts, genuinely slippery slick rock, thorn gating cliff tops, the Thorn hook, and a searchable wreck at camp.
 - **0.11 — Cable and Seed**: islands roughly doubled in size, resources no longer respawn, base planters as the renewable economy, motorised two-way ziplines, tameable ridgerunners, and far less thorn on the start island.
 - **0.12 — Stocktake**: the Survey lens (counts and tracks what is left on the rock), deposit markers on the sky chart, and a closer default camera.
-- **0.13 — The Drift** *(current build)*: endless procedural islands past either edge of the authored chain, a dedicated feed button, a passive scanner, the visor as a pannable survey view, and the jetpack rebuilt around arm-then-jump.
-- **0.14 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **0.13 — The Drift**: endless procedural islands past either edge of the authored chain, a dedicated feed button, a passive scanner, the visor as a pannable survey view, and the jetpack rebuilt around arm-then-jump.
+- **0.14 — Skyrunner** *(current build)*: the airship, the Skywyrm, the parachute/Ridge wing split, the Wing shield, three new creatures, panel tabs and bottom-left messages.
+- **0.15 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
 - **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions

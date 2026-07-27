@@ -25,6 +25,7 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 | Let go of the wall | release button (appears while climbing) | Q |
 | Survey view: zoom out, pan with the stick | binocular button | V |
 | Ride a zipline / drop off it | cable button (appears beside one) | Z |
+| Board / leave the airship | airship button (appears in range) | B |
 | Sky chart | map button (top right) | M |
 | Mute / unmute | speaker button (top right) | — |
 | Enter base | house button (appears in range) | E |
@@ -36,6 +37,10 @@ Cliff faces have **routes**, drawn in the rock's own colour with distinct patter
 **Thorn** grows across cliff lips and stops you topping out. Craft the **Thorn hook** (3 stone, 2 fiber) to cut through — it pays fiber back, and the thorn regrows in time. Search the **wrecked expedition** beside camp for starting supplies.
 
 Recipes are **discovered, not listed** — plans appear when you find the reason for them, so the fabricator only ever shows things you could actually build.
+
+The **Glider** is a parachute — it makes a fall survivable and steerable, not long. The **Ridge wing** (4 moth silk, 6 fiber, 2 crystal, at a Mk2) is what turns a drop into real distance, roughly tripling your glide. The **Wing shield** (3 grazer hide, 4 ore, 2 crystal) turns any flying attack aside for a little glove energy.
+
+The top of the tree is the **Skyrunner**, an airship built at a Mk3 bench. Board it from its own button and fly anywhere — no fuel, no gravity, no glove energy — and step off whenever you like. But the **Skywyrm** patrols the deep sky, and it goes for the ship as readily as for you. It warns you at long range and again when it commits; put distance between you and it loses interest. Take too many hits and the ship goes down to the nearest deck and mends itself there.
 
 You start bare-handed: gather on foot, hop the low hills, and fabricate **Magnetic gloves** before any cliff will take you. After that, cliffs never block you — walk in front of them, hold up to grab the face, and climb anywhere on it. Climbing drains glove energy and at zero you fall. Recharge on flat ground, fastest near the camp or a base. Granite needs gloves; basalt needs **Grip spikes**; storm rock needs **Resonant magnets**.
 
@@ -59,7 +64,7 @@ Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to
 
 Fabricators pool materials from your pack **and** the storage of any base you're standing in, so you never have to shuttle rocks out of a chest you're next to.
 
-**Thermals** — faint columns of rising air between islands — lift you *upward* while gliding, and the Thermal wing rides them hard. **Ridgerunners** patrol island tops and charge: barely any damage, but the shove will put you over an edge.
+**Thermals** — faint columns of rising air between islands — lift you *upward* while gliding, and the Thermal wing rides them hard. **Ridgerunners** patrol island tops and charge: barely any damage, but the shove will put you over an edge. **Ledge grazers** crop the moss up there — catch one by hand for hide. **Lantern moths** drift the gaps and glow after dark; fly through one for silk. **Shardlings** swarm off storm rock in knots of three.
 
 Going sideways pays too: **outposts** sit far east and west of the main chain, each with dense resources, wildlife and a sealed **relic**. Relics are permanent — never lost on death — and buy the **Relic compass** (arrows to relics you haven't found) and the **Relic core**, the top energy tier.
 
