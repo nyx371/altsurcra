@@ -153,6 +153,7 @@ group('world', async (t) => {
       minOre: 1e9, minCrystal: 1e9, minFiber: 1e9, minStone: 1e9, minSteel: 1e9,
       relicsMin: 1e9, relicNearCamp: 0, thermalsMin: 1e9,
       startRunners: 0, steelLow: 0, groundFiber: 1e9, groundStone: 1e9,
+      leviLow: 0, leviNear: 0,
     };
     const yields = { berry: 3, fiber: 3, stone: 3, ore: 3, crystal: 3, skysteel: 2 };
     for (let s = 1; s <= 30; s++) {
@@ -213,6 +214,11 @@ group('world', async (t) => {
       const steel = K.nodes.filter(n => n.type === 'skysteel');
       if (steel.some(n => n.y > camp.y - 200)) out.steelLow++;
 
+      if (K.leviathan) {
+        // it belongs near the ceiling, not in the airspace you climb through
+        if (K.leviathan.y > camp.y - 1500) out.leviLow++;
+        if (slab && Math.abs(K.leviathan.x - (slab.x + slab.w / 2)) < 900) out.leviNear++;
+      }
       out.relicsMin = Math.min(out.relicsMin, K.relics.length);
       out.thermalsMin = Math.min(out.thermalsMin, K.thermals.length);
       if (slab && K.relics.some(r => r.x > slab.x - 200 && r.x < slab.x + slab.w + 200)) out.relicNearCamp++;
@@ -239,6 +245,15 @@ group('world', async (t) => {
   ok('every world seeds relics', audit.relicsMin >= 3, audit.relicsMin);
   ok('relics never sit on the home island', audit.relicNearCamp === 0, audit.relicNearCamp);
   ok('every world seeds thermals', audit.thermalsMin >= 4, audit.thermalsMin);
+  ok('the Skywyrm always sits high above the ground', audit.leviLow === 0, audit.leviLow);
+  ok('and never spawns near the home island', audit.leviNear === 0, audit.leviNear);
+
+  const wyrm = await S(() => {
+    const K = window.SKYREACH;
+    return { warn: K.T.leviWarn, aggro: K.T.leviAggro, speed: K.T.leviSpeed, charge: K.T.leviCharge };
+  });
+  ok('its aggro range is small', wyrm.aggro <= 400, wyrm.aggro);
+  ok('and the warning still comes first', wyrm.warn > wyrm.aggro * 1.5, wyrm);
 
   const repro = await S(() => {
     const K = window.SKYREACH;
@@ -1035,6 +1050,20 @@ group('threats', async (t) => {
   });
   ok('shardlings bite', shard.none || shard.hp < 100, shard);
 
+  // everything that moves against you was slowed when the camera came in
+  const speeds = await S(() => {
+    const T = window.SKYREACH.T;
+    return {
+      runner: T.runnerSpeed, charge: T.runnerCharge, sting: T.stingSpeed,
+      shard: T.shardSpeed, beakDive: T.beakDive, levi: T.leviCharge,
+    };
+  });
+  ok('ridgerunners charge at a readable speed', speeds.charge <= 200, speeds.charge);
+  ok('stingwings chase at a readable speed', speeds.sting <= 125, speeds.sting);
+  ok('shardlings dive at a readable speed', speeds.shard <= 175, speeds.shard);
+  ok('nightwings dive at a readable speed', speeds.beakDive <= 260, speeds.beakDive);
+  ok('and so does the Skywyrm', speeds.levi <= 215, speeds.levi);
+
   // the Skywyrm: warns, commits, gives up
   const warn = await S(async () => {
     const K = window.SKYREACH;
@@ -1397,15 +1426,138 @@ group('ui', async (t) => {
   await page.waitForTimeout(200);
   ok('the close bar closes the panel', await S(() => document.getElementById('overlay-pack').classList.contains('hidden')));
 
-  // info messages, bottom left and left aligned
+  // info messages: top left, directly under the vital bars
   const toasts = await S(() => {
+    const K = window.SKYREACH;
+    K.toast('probe one', 'good', 'gloves');
+    K.toast('probe two', 'bad', 'gloves');
     const box = document.getElementById('toasts');
     const cs = getComputedStyle(box);
     const r = box.getBoundingClientRect();
-    return { align: cs.alignItems, left: Math.round(r.left), bottom: Math.round(window.innerHeight - r.bottom), w: window.innerWidth, h: window.innerHeight };
+    const bars = document.querySelector('.bars').getBoundingClientRect();
+    const first = box.querySelector('.toast');
+    return {
+      align: cs.alignItems, left: Math.round(r.left), top: Math.round(r.top),
+      belowBars: r.top >= bars.bottom - 1,
+      textAlign: first ? getComputedStyle(first).textAlign : null,
+      w: window.innerWidth, h: window.innerHeight,
+    };
   });
-  ok('info messages are left-aligned', toasts.align === 'flex-start', toasts.align);
-  ok('and sit bottom-left', toasts.left < toasts.w * 0.25 && toasts.bottom < toasts.h * 0.25, toasts);
+  ok('info messages are left-aligned', toasts.align === 'flex-start' && toasts.textAlign === 'left', toasts);
+  ok('and sit top-left', toasts.left < toasts.w * 0.25 && toasts.top < toasts.h * 0.6, toasts);
+  ok('directly below the vital bars', toasts.belowBars === true, toasts);
+
+  // the corner joystick
+  const stick = await S(() => {
+    const zone = document.getElementById('stick-zone');
+    const base = document.getElementById('stick-base');
+    const b = base.getBoundingClientRect();
+    const z = zone.getBoundingClientRect();
+    return {
+      visible: getComputedStyle(base).display !== 'none' && b.width > 0,
+      size: Math.round(b.width),
+      left: Math.round(b.left), bottom: Math.round(window.innerHeight - b.bottom),
+      zoneW: Math.round(z.width), zoneH: Math.round(z.height),
+      w: window.innerWidth, h: window.innerHeight,
+    };
+  });
+  ok('the joystick is always visible', stick.visible === true, stick);
+  ok('it is small', stick.size <= 110 && stick.size >= 60, stick.size);
+  ok('and pinned in the bottom-left corner',
+    stick.left < stick.w * 0.15 && stick.bottom < stick.h * 0.2, stick);
+  ok('its touch area is much larger than it looks',
+    stick.zoneW > stick.size * 2.5 && stick.zoneH > stick.size * 1.5, stick);
+
+  const steer = await S(() => {
+    const base = document.getElementById('stick-base').getBoundingClientRect();
+    return { cx: Math.round(base.left + base.width / 2), cy: Math.round(base.top + base.height / 2) };
+  });
+  await page.mouse.move(steer.cx, steer.cy);
+  await page.mouse.down();
+  await page.mouse.move(steer.cx + 120, steer.cy);
+  await page.waitForTimeout(120);
+  const deflected = await S(() => ({
+    x: window.SKYREACH.joy ? window.SKYREACH.joy.x : null,
+    nub: document.getElementById('stick-nub').style.transform,
+    active: document.getElementById('stick-zone').classList.contains('active'),
+  }));
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  ok('dragging it steers', deflected.x === 1 || /translate\(2[0-9]px/.test(deflected.nub), deflected);
+  ok('and it shows it is being held', deflected.active === true, deflected);
+  const recentred = await S(() => ({
+    t: document.getElementById('stick-nub').style.transform.replace(/\s+/g, ''),
+    joy: window.SKYREACH.joy.x,
+    active: document.getElementById('stick-zone').classList.contains('active'),
+  }));
+  ok('letting go recentres it', recentred.t === 'translate(-50%,-50%)' && recentred.joy === 0 && !recentred.active, recentred);
+
+  // the iOS long-press loupe: every control must take the pointer down itself
+  const guards = await S(() => {
+    const ids = ['btn-pack', 'btn-interact', 'btn-jump', 'btn-jet', 'btn-visor',
+      'btn-zip', 'btn-ship', 'btn-feed', 'btn-release', 'btn-base', 'btn-map', 'btn-sound', 'version-badge'];
+    const bad = [];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (!el) { bad.push(id + ':missing'); continue; }
+      const cs = getComputedStyle(el);
+      if (cs.touchAction !== 'none') bad.push(id + ':touch-action=' + cs.touchAction);
+      if ((cs.webkitUserSelect || cs.userSelect) !== 'none') bad.push(id + ':select');
+      if ((cs.webkitTouchCallout || 'none') !== 'none') bad.push(id + ':callout');
+    }
+    const zone = getComputedStyle(document.getElementById('stick-zone'));
+    if (zone.touchAction !== 'none') bad.push('stick-zone:touch-action');
+    return bad;
+  });
+  ok('every control blocks selection, callout and touch gestures', guards.length === 0, guards);
+
+  const longPress = await S(async () => {
+    // a long press on a control must not start a selection, and must still act
+    const el = document.getElementById('btn-visor');
+    let defaulted = false;
+    const spy = (e) => { if (!e.defaultPrevented) defaulted = true; };
+    el.addEventListener('pointerdown', spy);
+    el.addEventListener('touchstart', spy);
+    let ctx = false;
+    el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    ctx = true;
+    return { defaulted, ctx };
+  });
+  void longPress.ctx;
+  await page.hover('#btn-visor');
+  await page.mouse.down();
+  await page.waitForTimeout(900);
+  const held = await S(() => ({
+    sel: (window.getSelection() || { toString: () => '' }).toString(),
+    tapping: document.getElementById('btn-visor').dataset.tapping,
+  }));
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  ok('a long press on a control selects nothing', held.sel === '', JSON.stringify(held.sel));
+  ok('and still fires on release', await S(() => window.SKYREACH.visorOn) === true);
+  await S(() => { if (window.SKYREACH.visorOn) window.SKYREACH.toggleVisor(); });
+  await page.waitForTimeout(300);
+
+  // the camera sits close in
+  const zoom = await S(() => ({ base: window.SKYREACH.baseScale, scale: window.SKYREACH.scale }));
+  ok('the camera is zoomed well in', zoom.base >= 0.94, zoom);
+
+  // screen-edge markers must never park on a control
+  const markers = await S(() => {
+    const st = document.getElementById('stick-base').getBoundingClientRect();
+    const btn = document.getElementById('btn-jump').getBoundingClientRect();
+    const bad = [];
+    const hits = (p, r) => p.x > r.left - 20 && p.x < r.right + 20 && p.y > r.top - 20 && p.y < r.bottom + 20;
+    // sweep the whole viewport edge and check every clamped position
+    for (let x = -400; x < window.innerWidth + 400; x += 37) {
+      for (let y = -400; y < window.innerHeight + 400; y += 37) {
+        const p = window.SKYREACH.edgeClamp(x, y);
+        if (hits(p, st) || hits(p, btn)) bad.push(Math.round(p.x) + ',' + Math.round(p.y));
+      }
+    }
+    return bad;
+  });
+  ok('edge markers never land on the stick or the buttons', markers.length === 0, markers.slice(0, 4));
 
   // vitals stay legible over an open menu
   await page.click('#btn-pack');

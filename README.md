@@ -15,7 +15,7 @@ Vanilla JS, no dependencies, no build step — works on GitHub Pages as-is.
 
 | Action | Touch | Keyboard |
 |---|---|---|
-| Move / steer / climb | left-side virtual joystick | WASD / arrows |
+| Move / steer / climb | joystick, bottom-left corner | WASD / arrows |
 | Grab a cliff face / climb | hold up while in front of one | W / up |
 | Climb down from a top | hold down | S / down |
 | Jump · hold to glide (needs Glider) | right big button | Space |
@@ -66,7 +66,7 @@ Neutral wildlife is livestock: hold the hand button beside a **cliff lizard** to
 
 Fabricators pool materials from your pack **and** the storage of any base you're standing in, so you never have to shuttle rocks out of a chest you're next to.
 
-**Thermals** — faint columns of rising air between islands — lift you *upward* while gliding, and the Thermal wing rides them hard. **Ridgerunners** patrol island tops and charge: barely any damage, but the shove will put you over an edge. **Ledge grazers** crop the moss up there — catch one by hand for hide. **Lantern moths** drift the gaps and glow after dark; fly through one for silk. **Shardlings** swarm off storm rock in knots of three.
+**Thermals** — faint columns of rising air between islands — lift you *upward* while gliding, and the Thermal wing rides them hard. **Ridgerunners** patrol island tops and charge: barely any damage, but the shove will put you over an edge. The **Skywyrm** patrols near the ceiling, far above anything you can reach on foot — it warns you well before it commits, and leaving is always the answer. **Ledge grazers** crop the moss up there — catch one by hand for hide. **Lantern moths** drift the gaps and glow after dark; fly through one for silk. **Shardlings** swarm off storm rock in knots of three.
 
 Going sideways pays too: **outposts** sit far east and west of the main chain, each with dense resources, wildlife and a sealed **relic**. Relics are permanent — never lost on death — and buy the **Relic compass** (arrows to relics you haven't found) and the **Relic core**, the top energy tier.
 

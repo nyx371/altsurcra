@@ -375,7 +375,9 @@ Three additions, one per niche the world was missing:
 
 ### 8.1⅞ The Skywyrm **[v0.14]**
 
-One to a world. It patrols a slow figure-of-eight over the deep sky and it is not a hunter — it is a **moving exclusion zone**. At 1500px it warns you ("something enormous has noticed you"), at 900px it commits and says so, and then it closes at 330px/s on whichever of you or your airship is flying. Put 2000px between you, or survive 26 seconds, and it loses interest and re-homes wherever it ended up.
+One to a world. It patrols a slow figure-of-eight **near the ceiling** — 2100–2700px above the ground line, never above the home island — and it is not a hunter but a **moving exclusion zone**. At 620px it warns you ("something enormous has noticed you"), at 340px it commits and says so, and then it closes at 205px/s on whichever of you or your airship is flying. Put distance between you, or survive 26 seconds, and it loses interest and re-homes wherever it ended up.
+
+*Retuned in v0.15.* It was originally 900–1500px up with a 900px aggro radius and a 900px patrol sweep, which made it a wall of hostile territory across airspace you had to climb through on the way to the summit. High and small is the better shape: you meet it when you deliberately go up to where it lives, and its warning still comes at nearly twice its reach.
 
 Everything about it is built to be *avoidable*. The two-stage warning, the wide aggro radius, the give-up timer and the re-homing all say the same thing: this is terrain, not a boss. The correct play is always to leave, which is why it is the right threat to point at an airship — a vehicle that removes every other movement problem needs one problem it cannot out-fly, and "there is a part of the sky you do not go" is a better answer than nerfing the ship.
 
@@ -385,7 +387,7 @@ Nest colonies (area denial), rock-mimics on climbable faces, storm cells in Band
 
 ## 9. Controls (mobile) **[v0.1, layout fixed in v0.7]**
 
-- **Left thumb:** virtual joystick — walk, steer climbs, steer glides.
+- **Left thumb:** a **small joystick fixed in the bottom-left corner [v0.15]** — walk, steer climbs, steer glides. It used to spring up wherever you first touched, which meant there was nothing on screen telling a new player it existed and no fixed reference for where centre was. It is now always visible, deflection is measured from the ring, and the region that drives it is still most of the lower-left quadrant, so a thumb never has to find it exactly.
 - **Right thumb:** a **fixed 3x4 grid**. The bottom row never changes: **Pack**, **Hand** (harvest/catch/loot), **Jump/Glide/Thrust**. Contextual buttons occupy their own permanent cells above it — thruster directly above jump, let-go above that, base and visor in the columns to the left, the **cable** and **feed** buttons on the row above that, and the **board** button top-right. Buttons appear and disappear, but nothing ever *shifts*: muscle memory for the two you use constantly is worth more than a tidy row.
 - **One action per button [v0.13].** Feeding moved off the hand and onto its own button, because a hand that harvests, catches, loots, robs *and* feeds has to guess, and guessing wrong costs you a berry or a climb. Anything with a target of its own gets a button of its own.
 - **Vital bars sit above the menus [v0.7]**, with a dark backing while one is open — you decide what to eat or craft *because* of what your health and energy say, so hiding them behind the pack was backwards.
@@ -402,7 +404,7 @@ The pack grew from four recipes to a personal fabricator with fourteen plans, a 
 
 Both big panels are now **flex columns with tabs pinned at the bottom**, beside the close bar. Bottom, not top, for the same reason the close bar is: that is where the thumb already is on a phone. Built one-off gear collapses out of the recipe list into a chip row, so the list you scroll is only the list you can still act on, and recipe rows lost a third of their height.
 
-**Info messages moved to the bottom left, left-aligned.** They used to sit centred at 30% height — straight over the part of the screen you are actually looking at while climbing. Bottom-left is the one corner with neither thumb nor action in it, and left-aligning them means a stack of three reads as a log rather than as drifting confetti.
+**Info messages moved to the top left, under the vital bars [v0.15].** They started centred at 30% height — straight over the part of the screen you are actually looking at while climbing. v0.14 moved them bottom-left, which then collided with the new corner joystick. They now hang off the bottom of the HUD's left column as a child element rather than being positioned by hand, so they always sit clear of the bars and follow them when those shrink behind an open menu. Left-aligned, so a stack of three reads as a log rather than as drifting confetti.
 
 ## 9⅔. Arming, not holding **[v0.13]**
 
@@ -416,11 +418,25 @@ The Range visor used to be a zoom you could fly with. Now, **while you are stand
 
 The rule "pan only when you have stopped" is what makes it safe to hand the stick to the camera. It also states the tool's purpose out loud: reading a route is something you do *before* committing, from somewhere you are not going to fall off.
 
-## 9¾. Camera **[v0.9, retuned v0.12]**
+## 9¾. Camera, and the speed of everything else **[v0.9, retuned v0.12 and v0.15]**
 
-The world is framed against a **reference viewport** rather than a fixed zoom, so the same amount of world fits on a phone and a laptop. v0.12 pulled that reference in (380x620, floor 0.75, from 450x750/0.6) — at the old setting the character was small enough that reading a route meant squinting, which was working against the whole point of route features (4.2½). The **Range visor** is a multiplier on the base scale, so it was divided by the same factor: the visor still frames roughly 8000px of sky, it just does it from a closer starting point.
+The world is framed against a **reference viewport** rather than a fixed zoom, so the same amount of world fits on a phone and a laptop. It has come in twice: 450x750/floor 0.6 → 380x620/0.75 (v0.12) → **300x500/0.95** (v0.15). At the original setting the character was small enough that reading a route meant squinting, which worked against the whole point of route features (4.2½). The **Range visor** is a multiplier on the base scale, so it is divided by the same factor each time: it still frames roughly the same slice of sky, just from a closer start.
+
+**Zooming in is a difficulty change, not a view change [v0.15].** Every creature speed was tuned when the camera was much further out. Pull the camera in and the same numbers arrive on screen with a third less warning — a charging ridgerunner that used to enter frame two seconds out now enters one second out, and nothing about your options changed. So the whole threat table came down about a third alongside the zoom: ridgerunner charge 275 → 195, stingwing chase 170 → 118, shardling dive 250 → 165, nightwing dive cap 330 → 250, Skywyrm charge 330 → 205, with the neutral wildlife's skitter slowed to match so the world does not read as jittery up close.
+
+The player's own speeds were deliberately **left alone**. The complaint being answered is "I do not have time to react", and the answer to that is more time to read a threat, not less control over yourself.
 
 The camera also **leads your velocity** (up to 320px) so you can see what you are flying into.
+
+## 9⅞. The iOS long-press magnifier **[v0.6, v0.10, properly fixed v0.15]**
+
+Three passes at this, and the first two treated it as a CSS problem. `-webkit-user-select: none`, `-webkit-touch-callout: none`, every vendor spelling, a transparent `::selection`, `selectstart` prevented, stray selections cleared — all of it correct, none of it sufficient, and the loupe kept appearing on the action buttons.
+
+The actual cause was event handling. Only three buttons (jump, hand, feed) listened for `pointerdown` and called `preventDefault`. Every other control — thruster, visor, cable, board, base, let-go, pack, map, sound, the version badge — listened only for `click`. On iOS, `click` is **synthesised after** the system has already classified a long press as a text-selection gesture, so by the time the handler ran the loupe was up. There was never a handler in the chain saying "this press is mine".
+
+The fix is a `bindTap` helper that takes the `pointerdown`, prevents its default, and fires on the matching `pointerup` — plus a `touchstart` preventDefault and a `contextmenu` guard per control. The CSS was then made explicit on form controls (`button`, `.abtn`, `.hud-btn`, the stick) rather than relying on the universal selector, because WebKit does not reliably inherit these onto controls.
+
+The lesson worth keeping: **`touch-action` and `user-select` describe intent; only owning the pointer event enforces it.**
 
 ## 10. Presentation **[v0.1]**
 
@@ -472,8 +488,9 @@ Semver-ish: `0.MINOR.PATCH` — minor = new system, patch = tuning/fixes. Each v
 - **0.11 — Cable and Seed**: islands roughly doubled in size, resources no longer respawn, base planters as the renewable economy, motorised two-way ziplines, tameable ridgerunners, and far less thorn on the start island.
 - **0.12 — Stocktake**: the Survey lens (counts and tracks what is left on the rock), deposit markers on the sky chart, and a closer default camera.
 - **0.13 — The Drift**: endless procedural islands past either edge of the authored chain, a dedicated feed button, a passive scanner, the visor as a pannable survey view, and the jetpack rebuilt around arm-then-jump.
-- **0.14 — Skyrunner** *(current build)*: the airship, the Skywyrm, the parachute/Ridge wing split, the Wing shield, three new creatures, panel tabs and bottom-left messages.
-- **0.15 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
+- **0.14 — Skyrunner**: the airship, the Skywyrm, the parachute/Ridge wing split, the Wing shield, three new creatures, panel tabs and bottom-left messages.
+- **0.15 — Close In** *(current build)*: a much closer camera with every threat slowed to match, a fixed corner joystick, messages under the vitals, the Skywyrm moved to the ceiling, and the iOS long-press magnifier properly fixed.
+- **0.16 — Alive Sky**: predator/prey ecology (nightwings hunting trout), nesting colonies, seasons or altitude weather bands, more codex entries.
 - **1.0 — The Ceiling**: what is above the cloud ceiling — the answer to the beacon.
 
 ## 12. Design questions

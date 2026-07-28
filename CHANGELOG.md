@@ -2,6 +2,16 @@
 
 Mirrored in-game: tap the version badge. Source of truth for the in-game view is `js/version.js`.
 
+## v0.15.0 — Close In (2026-07-28)
+
+- **Zoomed in.** The camera's reference viewport came in from 380×620 to 300×500 with the floor raised 0.75 → 0.95, so the world sits noticeably closer. The Range visor was retuned by the same factor to keep framing the same amount of sky
+- **Everything that moves against you is about a third slower**, so a threat arriving at the new zoom is still something you can read and answer: ridgerunners (charge 275 → 195), stingwings (170 → 118), shardlings (250 → 165), nightwings (dive cap 330 → 250), the Skywyrm (330 → 205), and the neutral wildlife's skitter with them
+- **A small joystick now sits permanently in the bottom-left corner.** It no longer springs up wherever you touch — deflection is measured from the fixed ring, and the region that drives it is still most of the lower-left quadrant
+- **Messages moved to the top left, under the vital bars.** They are a child of the HUD column now, so they follow the bars automatically when those shrink behind a menu
+- **The Skywyrm lives near the ceiling** (2100–2700px above the ground line, never near the home island), patrols a much tighter arc, and its aggro radius dropped 900 → 340 with the warning at 620
+- **iOS long-press magnifier, properly fixed.** Every button except three was listening only for `click`, which iOS synthesises *after* it has already decided a long press was a text-selection gesture. All controls now take the `pointerdown` and prevent its default, plus explicit `-webkit-touch-callout` / `-webkit-user-select` / `touch-action` rules on form controls rather than relying on the universal selector
+- Screen-edge markers (relic compass, survey lens, the wyrm) are pushed clear of the joystick and the button grid
+
 ## v0.14.1 — Debug Modes (2026-07-27)
 
 - **Invincible** (cheats row, or `I`): hits, bleed damage and starvation all do nothing, and falling past the cloud sea puts you back at your last safe spot instead of killing you

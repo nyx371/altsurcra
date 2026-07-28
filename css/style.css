@@ -17,6 +17,29 @@
 img, svg, canvas { -webkit-user-drag: none; pointer-events: none; }
 button svg, .abtn svg, .inv-item svg { pointer-events: none; }
 
+/* Explicit, not inherited: WebKit does not reliably apply the universal rule to
+   form controls, and a long press on a <button> was still raising the loupe. */
+button,
+.abtn,
+.abtn *,
+.hud-btn,
+#version-badge,
+#stick-zone,
+#stick-zone * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-drag: none;
+  touch-action: none;
+}
+/* menu buttons still want a normal tap, just not a selection gesture */
+.panel button, .close-bar, .mini-btn, .craft-btn, .tab-bar button {
+  touch-action: manipulation;
+}
+
 html, body {
   width: 100%; height: 100%;
   overflow: hidden;
@@ -104,15 +127,15 @@ body.menu-open #weather { display: none; }
 
 /* ---------- Toasts ---------- */
 
-/* Info messages live bottom-left, left-aligned: out of the way of both thumbs
-   and of the middle of the screen, which is where you are actually looking. */
+/* Info messages sit top-left, directly under the vital bars, left-aligned. They
+   are a child of the HUD column rather than positioned by hand, so they follow
+   the bars automatically when those shrink behind an open menu. */
+.hud-left { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 #toasts {
-  position: fixed;
-  left: calc(env(safe-area-inset-left, 0px) + 12px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-  max-width: min(46vw, 340px);
+  margin-top: 8px;
+  max-width: min(52vw, 340px);
   display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
-  pointer-events: none; z-index: 30;
+  pointer-events: none;
 }
 .toast {
   background: rgba(10, 16, 36, .85);
@@ -134,24 +157,35 @@ body.menu-open #weather { display: none; }
 
 /* ---------- Touch controls ---------- */
 
+/* The stick is small and always visible in the corner, but the region that
+   drives it is most of the lower-left quadrant — you should never have to look
+   down to find it. */
 #stick-zone {
   position: fixed; left: 0; bottom: 0;
-  width: 48%; height: 55%;
+  width: 46%; height: 52%;
   z-index: 10;
 }
 #stick-base {
   position: absolute;
-  width: 116px; height: 116px; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.22);
-  background: rgba(10, 16, 36, .35);
-  display: none;
+  left: calc(env(safe-area-inset-left, 0px) + 22px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  width: 92px; height: 92px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.20);
+  background: rgba(10, 16, 36, .30);
+  transition: border-color .12s, background .12s;
+}
+#stick-zone.active #stick-base {
+  border-color: rgba(174, 203, 255, .55);
+  background: rgba(10, 16, 36, .45);
 }
 #stick-nub {
   position: absolute; left: 50%; top: 50%;
-  width: 52px; height: 52px; border-radius: 50%;
-  background: rgba(174, 203, 255, .55);
+  width: 42px; height: 42px; border-radius: 50%;
+  background: rgba(174, 203, 255, .45);
   transform: translate(-50%, -50%);
+  transition: background .12s;
 }
+#stick-zone.active #stick-nub { background: rgba(174, 203, 255, .7); }
 
 #action-buttons {
   position: fixed;

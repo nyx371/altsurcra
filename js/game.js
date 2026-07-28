@@ -92,14 +92,19 @@ const T = {
   thermalLiftWing: -235,  // with the thermal wing fitted
   // The visor is a multiplier on the base scale, so it is retuned whenever the
   // default zoom moves — the point is a fixed amount of *world* on screen.
-  visorZoom: 0.136,       // camera scale multiplier while the visor is up
+  visorZoom: 0.107,       // camera scale multiplier while the visor is up
   visorPan: 2400,         // world px/s the stick pans the camera while surveying
   visorPanMax: 3400,      // how far from yourself the survey view can wander
   stingDamage: 10,
   stingCooldown: 2.2,     // it peels off after a sting and comes round again
   shieldCost: 5,          // glove energy spent turning a flyer's hit aside
   shardDamage: 4,
-  shardCooldown: 1.6,
+  shardCooldown: 1.9,
+  shardSpeed: 165,        // dive speed
+  stingSpeed: 118,        // stingwing chase
+  stingReturn: 92,
+  beakPatrol: 66,
+  beakDive: 250,
   // the airship: the endgame vehicle, and the only thing that flies for free
   shipSpeed: 330,
   shipAccel: 700,
@@ -107,10 +112,12 @@ const T = {
   shipRepair: 3.5,        // hull/s, always — it is a ship, it has a crew of one
   shipBoardRange: 110,
   // the leviathan: a moving no-go zone with a long warning
-  leviWarn: 1500,
-  leviAggro: 900,
-  leviSpeed: 190,
-  leviCharge: 330,
+  // The wyrm lives near the ceiling now and guards a far smaller space: it should
+  // be a thing you see long before it is a thing you are inside.
+  leviWarn: 620,
+  leviAggro: 340,
+  leviSpeed: 120,
+  leviCharge: 205,
   leviDamage: 34,
   leviShipDamage: 26,
   leviCooldown: 2.4,
@@ -118,8 +125,11 @@ const T = {
   flySpeed: 520,          // debug free-flight
   lookAhead: 0.55,        // how far the camera leads your velocity
   lookAheadMax: 320,
-  runnerSpeed: 96,
-  runnerCharge: 275,
+  // Creature speeds were tuned when the camera was much further out. Zoomed in,
+  // the same numbers arrive faster than you can read them, so everything that
+  // moves against you gives you about a third more time to answer it.
+  runnerSpeed: 68,
+  runnerCharge: 195,
   runnerDamage: 6,
   runnerKnock: 430,
   dayLength: 300,         // seconds for a full day/night turn
@@ -648,7 +658,8 @@ function generateWorld(seed) {
   // not a hunter — it is a place you are not allowed to be, and it moves.
   {
     const lx = R(sx + startW + 900, sx + startW + 3200);
-    const ly = clamp(groundY - R(900, 1500), WORLD.top + 300, groundY - 500);
+    // up near the summit line, well above anything you can reach on foot
+    const ly = clamp(groundY - R(2100, 2700), 420, groundY - 1600);
     leviathan = {
       x: lx, y: ly, home: { x: lx, y: ly },
       dir: 1, t: 0, mode: 'patrol', cd: 0, calm: 0, warned: false, aggro: 0,
@@ -1149,31 +1160,49 @@ const stickZone = document.getElementById('stick-zone');
 const stickBase = document.getElementById('stick-base');
 const stickNub = document.getElementById('stick-nub');
 
-stickZone.addEventListener('pointerdown', e => {
-  if (joy.active) return;
-  joy.active = true; joy.id = e.pointerId;
-  joy.ox = e.clientX; joy.oy = e.clientY; joy.x = 0; joy.y = 0;
-  stickBase.style.display = 'block';
-  stickBase.style.left = (e.clientX - 58) + 'px';
-  stickBase.style.top = (e.clientY - 58) + 'px';
-  stickZone.setPointerCapture(e.pointerId);
-});
-stickZone.addEventListener('pointermove', e => {
-  if (!joy.active || e.pointerId !== joy.id) return;
-  let dx = (e.clientX - joy.ox) / 46, dy = (e.clientY - joy.oy) / 46;
+// The stick is a fixed, always-visible ring in the bottom-left corner, but the
+// area that drives it is the whole lower-left quadrant: deflection is measured
+// from the ring's centre, so a thumb landing anywhere sensible still steers.
+const JOY_RADIUS = 42;   // px of travel for full deflection
+const JOY_NUB = 26;      // how far the nub itself moves
+
+function joyCentre() {
+  const r = stickBase.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+function joyMove(e) {
+  const c = joyCentre();
+  let dx = (e.clientX - c.x) / JOY_RADIUS, dy = (e.clientY - c.y) / JOY_RADIUS;
   const len = Math.hypot(dx, dy);
   if (len > 1) { dx /= len; dy /= len; }
   joy.x = dx; joy.y = dy;
-  stickNub.style.transform = 'translate(-50%,-50%) translate(' + dx * 32 + 'px,' + dy * 32 + 'px)';
+  stickNub.style.transform = 'translate(-50%,-50%) translate(' +
+    (dx * JOY_NUB) + 'px,' + (dy * JOY_NUB) + 'px)';
+}
+
+stickZone.addEventListener('pointerdown', e => {
+  if (joy.active) return;
+  e.preventDefault();
+  joy.active = true; joy.id = e.pointerId;
+  stickZone.classList.add('active');
+  stickZone.setPointerCapture(e.pointerId);
+  joyMove(e);
+});
+stickZone.addEventListener('pointermove', e => {
+  if (!joy.active || e.pointerId !== joy.id) return;
+  joyMove(e);
 });
 function joyEnd(e) {
   if (e.pointerId !== joy.id) return;
   joy.active = false; joy.x = 0; joy.y = 0;
-  stickBase.style.display = 'none';
+  stickZone.classList.remove('active');
   stickNub.style.transform = 'translate(-50%,-50%)';
 }
 stickZone.addEventListener('pointerup', joyEnd);
 stickZone.addEventListener('pointercancel', joyEnd);
+stickZone.addEventListener('contextmenu', e => e.preventDefault());
+stickZone.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
 
 const btnJump = document.getElementById('btn-jump');
 const btnInteract = document.getElementById('btn-interact');
@@ -1199,10 +1228,38 @@ function bindHold(el, prop) {
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
 }
+
+// A tap that never becomes a long press. `click` is synthesised *after* iOS has
+// already decided a long press was a text-selection gesture, which is why the
+// loupe kept appearing on every button that only listened for click. Taking the
+// pointerdown and preventing its default is what actually stops it.
+function bindTap(el, fn) {
+  if (!el) return;
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    el.dataset.tapping = '1';
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* mouse in a test */ }
+  });
+  el.addEventListener('pointerup', e => {
+    e.preventDefault();
+    if (el.dataset.tapping !== '1') return;
+    delete el.dataset.tapping;
+    fn(e);
+  });
+  el.addEventListener('pointercancel', () => { delete el.dataset.tapping; });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  // long-press on a control is never a text gesture, whatever WebKit thinks
+  el.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+}
+
 bindHold(btnJump, 'jump');
 bindHold(btnInteract, 'interact');
 bindHold(btnFeed, 'feed');
-btnJet.addEventListener('click', toggleJet);
+for (const el of [btnJump, btnInteract, btnFeed]) {
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+}
+bindTap(btnJet, toggleJet);
 
 // The thruster button ARMS the jetpack; jump is what actually fires it. Arming is
 // a state you set once and forget, and flying then uses the button your thumb is
@@ -1221,12 +1278,12 @@ function jetOff() {
   btnJet.classList.remove('on');
   btnJet.classList.remove('firing');
 }
-btnPack.addEventListener('click', () => togglePack());
-btnBase.addEventListener('click', () => { const b = nearestBase(); if (b) openBase(b); });
-btnRelease.addEventListener('click', releaseClimb);
-btnVisor.addEventListener('click', toggleVisor);
-btnZip.addEventListener('click', toggleZip);
-btnShip.addEventListener('click', () => { if (player.state === 'ship') leaveShip(); else boardShip(); });
+bindTap(btnPack, () => togglePack());
+bindTap(btnBase, () => { const b = nearestBase(); if (b) openBase(b); });
+bindTap(btnRelease, releaseClimb);
+bindTap(btnVisor, toggleVisor);
+bindTap(btnZip, toggleZip);
+bindTap(btnShip, () => { if (player.state === 'ship') leaveShip(); else boardShip(); });
 
 function toggleVisor() {
   if (!flags.visor) return;
@@ -2299,8 +2356,8 @@ function updateStingwings(dt) {
       if (dToPlayer < 180 && !deathCause) w.mode = 'chase';
     } else if (w.mode === 'chase') {
       const ang = Math.atan2(pc.y - w.y, pc.x - w.x);
-      w.x += Math.cos(ang) * 170 * dt;
-      w.y += Math.sin(ang) * 170 * dt;
+      w.x += Math.cos(ang) * T.stingSpeed * dt;
+      w.y += Math.sin(ang) * T.stingSpeed * dt;
       if (dToPlayer > 420 || deathCause) w.mode = 'return';
       if (dToPlayer < 28 && w.hitCd <= 0) {
         // A sting, then it peels off and comes round again. It used to knock you
@@ -2315,13 +2372,13 @@ function updateStingwings(dt) {
     } else if (w.mode === 'peel') {
       // backs off to a holding distance, then dives again
       w.peelT += dt;
-      w.x += w.peelDir * 150 * dt;
-      w.y -= 60 * dt;
+      w.x += w.peelDir * 105 * dt;
+      w.y -= 42 * dt;
       if (w.peelT > T.stingCooldown * 0.8) w.mode = dToPlayer < 420 ? 'chase' : 'return';
     } else {
       const ang = Math.atan2(w.nest.y - w.y, w.nest.x - w.x);
-      w.x += Math.cos(ang) * 130 * dt;
-      w.y += Math.sin(ang) * 130 * dt;
+      w.x += Math.cos(ang) * T.stingReturn * dt;
+      w.y += Math.sin(ang) * T.stingReturn * dt;
       if (dist(w.x, w.y, w.nest.x, w.nest.y) < 12) { w.mode = 'idle'; w.t = 0; }
     }
   }
@@ -2335,7 +2392,7 @@ function updateRazorbeaks(dt) {
     const airborne = player.state === 'air' || player.state === 'glide';
     const dToPlayer = dist(b.x, b.y, pc.x, pc.y);
     if (b.mode === 'patrol') {
-      b.x += b.dir * 95 * dt;
+      b.x += b.dir * T.beakPatrol * dt;
       b.y = b.anchor.y + Math.sin(b.t * 1.1) * 16;
       if (b.x < b.anchor.x0) b.dir = 1;
       if (b.x > b.anchor.x1) b.dir = -1;
@@ -2344,10 +2401,10 @@ function updateRazorbeaks(dt) {
     } else if (b.mode === 'swoop') {
       b.swoopT += dt;
       const ang = Math.atan2(pc.y - b.y, pc.x - b.x);
-      b.vx = (b.vx || 0) + Math.cos(ang) * 600 * dt;
-      b.vy = (b.vy || 0) + Math.sin(ang) * 600 * dt;
+      b.vx = (b.vx || 0) + Math.cos(ang) * 420 * dt;
+      b.vy = (b.vy || 0) + Math.sin(ang) * 420 * dt;
       const sp = Math.hypot(b.vx, b.vy);
-      const cap = 330 * (1 + nightAmount() * 0.25);
+      const cap = T.beakDive * (1 + nightAmount() * 0.25);
       if (sp > cap) { b.vx *= cap / sp; b.vy *= cap / sp; }
       b.x += b.vx * dt; b.y += b.vy * dt;
       b.dir = b.vx > 0 ? 1 : -1;
@@ -2358,8 +2415,8 @@ function updateRazorbeaks(dt) {
       } else if (b.swoopT > 2.6 || !airborne) { b.mode = 'rise'; b.cd = 1.5; }
     } else {
       const ang = Math.atan2(b.anchor.y - b.y, (b.anchor.x0 + b.anchor.x1) / 2 - b.x);
-      b.x += Math.cos(ang) * 150 * dt;
-      b.y += Math.sin(ang) * 150 * dt;
+      b.x += Math.cos(ang) * 105 * dt;
+      b.y += Math.sin(ang) * 105 * dt;
       if (Math.abs(b.y - b.anchor.y) < 20) { b.mode = 'patrol'; b.vx = 0; b.vy = 0; }
     }
   }
@@ -2478,7 +2535,7 @@ function updateGrazers(dt) {
       g.spook = 0.45;
       g.dir = pc.x > g.x ? -1 : 1;
     }
-    const sp = g.spook > 0 ? 85 : 42;
+    const sp = g.spook > 0 ? 62 : 30;
     if (g.spook > 0 || g.t <= 0) {
       if (g.t <= 0) { g.t = 2 + Math.random() * 4; if (Math.random() < 0.4) g.dir = -g.dir; }
       g.x += g.dir * sp * dt;
@@ -2525,8 +2582,8 @@ function updateShardlings(dt) {
       if (d < 230 && !deathCause) sh.mode = 'dive';
     } else {
       const ang = Math.atan2(pc.y - sh.y, pc.x - sh.x);
-      sh.x += Math.cos(ang) * 250 * dt;
-      sh.y += Math.sin(ang) * 250 * dt;
+      sh.x += Math.cos(ang) * T.shardSpeed * dt;
+      sh.y += Math.sin(ang) * T.shardSpeed * dt;
       if (d > 460 || deathCause) sh.mode = 'hover';
       if (d < 24 && sh.cd <= 0) {
         sh.cd = T.shardCooldown;
@@ -2559,8 +2616,8 @@ function updateLeviathan(dt) {
 
   if (lv.mode === 'patrol') {
     // a slow figure-of-eight around its home, so its territory has a shape
-    lv.x = lv.home.x + Math.sin(lv.t * 0.11) * 900;
-    lv.y = lv.home.y + Math.sin(lv.t * 0.19) * 260;
+    lv.x = lv.home.x + Math.sin(lv.t * 0.09) * 520;
+    lv.y = lv.home.y + Math.sin(lv.t * 0.15) * 170;
     lv.dir = Math.cos(lv.t * 0.11) > 0 ? 1 : -1;
     if (d < T.leviWarn && !lv.warned && !deathCause) {
       lv.warned = true;
@@ -2717,7 +2774,7 @@ function updateLizards(dt) {
     const dx = l.tx - l.x, dy = l.ty - l.y;
     const d = Math.hypot(dx, dy);
     if (d > 3) {
-      const sp = dp < 90 ? 78 : 38;
+      const sp = dp < 90 ? 56 : 28;
       l.x += dx / d * sp * dt;
       l.y += dy / d * sp * dt;
       if (Math.abs(dx) > 2) l.dir = dx > 0 ? 1 : -1;
@@ -3676,7 +3733,7 @@ function renderMap() {
 
 // changelog
 
-document.getElementById('version-badge').addEventListener('click', () => {
+bindTap(document.getElementById('version-badge'), () => {
   const body = document.getElementById('changelog-body');
   body.innerHTML = '';
   for (const entry of CHANGELOG) {
@@ -3698,8 +3755,8 @@ document.getElementById('version-badge').addEventListener('click', () => {
 
 document.getElementById('btn-respawn').addEventListener('click', respawn);
 document.getElementById('btn-open-log').addEventListener('click', () => { renderLog(); openOverlay('overlay-log'); });
-document.getElementById('btn-map').addEventListener('click', () => { renderMap(); openOverlay('overlay-map'); });
-document.getElementById('btn-sound').addEventListener('click', toggleAudio);
+bindTap(document.getElementById('btn-map'), () => { renderMap(); openOverlay('overlay-map'); });
+bindTap(document.getElementById('btn-sound'), toggleAudio);
 document.getElementById('btn-win-close').addEventListener('click', () => {
   document.getElementById('overlay-win').classList.add('hidden');
   document.body.classList.toggle('menu-open', anyOverlayOpen());
@@ -3798,6 +3855,24 @@ function updateHUD() {
 
 // ---------- rendering ----------
 
+// Screen-edge markers (relic compass, survey lens, the wyrm) get clamped to the
+// viewport, which used to park them on top of the joystick or the button grid.
+// Push them out of both corners so a marker is never something you tap through.
+function edgeClamp(sx, sy) {
+  const m = 46;
+  let x = clamp(sx, m, cw - m), y = clamp(sy, m, chh - m);
+  const stick = { x0: 0, y0: chh - 150, x1: 150, y1: chh };
+  const btns = { x0: cw - 250, y0: chh - 250, x1: cw, y1: chh };
+  for (const box of [stick, btns]) {
+    if (x < box.x0 || x > box.x1 || y < box.y0 || y > box.y1) continue;
+    // shove it out the nearest free side: up, or inward horizontally
+    const up = y - box.y0;
+    const side = box === stick ? box.x1 - x : x - box.x0;
+    if (up <= side) y = box.y0 - 24; else x = box === stick ? box.x1 + 24 : box.x0 - 24;
+  }
+  return { x: clamp(x, m, cw - m), y: clamp(y, m, chh - m) };
+}
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let cw = 0, chh = 0, dpr = 1, scale = 1;
@@ -3810,7 +3885,7 @@ function resize() {
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(chh * dpr);
   // reference viewport the world is framed against — smaller means closer in
-  baseScale = Math.max(Math.min(cw / 380, chh / 620), 0.75);
+  baseScale = Math.max(Math.min(cw / 300, chh / 500), 0.95);
   scale = baseScale;
 }
 window.addEventListener('resize', resize);
@@ -4392,7 +4467,8 @@ function render() {
     const sp = w2s(leviathan.x, leviathan.y);
     const m = 46;
     if (!(sp.x > m && sp.x < cw - m && sp.y > m && sp.y < chh - m)) {
-      const px = clamp(sp.x, m, cw - m), py = clamp(sp.y, m, chh - m);
+      const ec = edgeClamp(sp.x, sp.y);
+      const px = ec.x, py = ec.y;
       ctx.save();
       ctx.fillStyle = 'rgba(40,10,16,0.8)';
       ctx.beginPath(); ctx.arc(px, py, 21, 0, Math.PI * 2); ctx.fill();
@@ -4411,7 +4487,8 @@ function render() {
       const m = 46;
       const onScreen = s.x > m && s.x < cw - m && s.y > m && s.y < chh - m;
       if (onScreen) continue;
-      const px = clamp(s.x, m, cw - m), py = clamp(s.y, m, chh - m);
+      const ec = edgeClamp(s.x, s.y);
+      const px = ec.x, py = ec.y;
       const far = Math.round(dist(player.x, player.y, rl.x, rl.y) / 10);
       ctx.save();
       ctx.globalAlpha = 0.9;
@@ -4434,7 +4511,8 @@ function render() {
       const s = w2s(n.x, n.y);
       const m = 46;
       const onScreen = s.x > m && s.x < cw - m && s.y > m && s.y < chh - m;
-      const px = clamp(s.x, m, cw - m), py = clamp(s.y, m, chh - m);
+      const ec = edgeClamp(s.x, s.y);
+      const px = ec.x, py = ec.y;
       const far = Math.round(dist(player.x, player.y, n.x, n.y) / 10);
       ctx.save();
       ctx.globalAlpha = onScreen ? 0.55 : 0.95;
@@ -4692,7 +4770,7 @@ document.getElementById('btn-sound').innerHTML = svgIcon(audio.on ? 'sound-on' :
 cam.x = player.x; cam.y = player.y - 60;
 requestAnimationFrame(frame);
 
-toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Skyrunner', 'good', 'mountain-climbing');
+toast(resumed ? 'Climb resumed — v' + GAME_VERSION : 'Skyreach v' + GAME_VERSION + ' — Close In', 'good', 'mountain-climbing');
 window.addEventListener('pagehide', saveGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
@@ -4736,6 +4814,8 @@ window.SKYREACH = {
   get panX() { return panX; }, get panY() { return panY; },
   surveyRemaining, nearestTracked, trackMaterial, renderSurvey,
   get tracked() { return tracked; },
+  get joy() { return joy; },
+  toast, edgeClamp,
   get debug() { return debug; },
   get baseScale() { return baseScale; },
   get nodeTypes() { return NODE_TYPES; },

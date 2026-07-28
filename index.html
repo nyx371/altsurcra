@@ -14,13 +14,17 @@
 <canvas id="game"></canvas>
 
 <div id="hud">
-  <div class="bars">
-    <div class="bar" id="bar-health"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
-    <div class="bar" id="bar-food"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
-    <div class="bar" id="bar-energy"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
-    <div class="bar hidden" id="bar-fuel"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
-    <div id="debug-flags" class="hidden"></div>
-    <div id="weather" class="hidden"></div>
+  <div class="hud-left">
+    <div class="bars">
+      <div class="bar" id="bar-health"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div class="bar" id="bar-food"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div class="bar" id="bar-energy"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div class="bar hidden" id="bar-fuel"><span class="bar-icon"></span><div class="bar-track"><div class="bar-fill"></div></div></div>
+      <div id="debug-flags" class="hidden"></div>
+      <div id="weather" class="hidden"></div>
+    </div>
+    <!-- messages flow directly under the vitals, so they always sit clear of them -->
+    <div id="toasts"></div>
   </div>
   <div class="hud-right">
   <button id="btn-sound" class="hud-btn" type="button"></button>
@@ -29,8 +33,8 @@
   </div>
 </div>
 
-<div id="toasts"></div>
-
+<!-- A small, always-visible joystick pinned bottom-left. The touch zone around
+     it is much larger than it looks, so a thumb never has to find it exactly. -->
 <div id="stick-zone"><div id="stick-base"><div id="stick-nub"></div></div></div>
 
 <!-- Fixed grid: hand and jump never move. Contextual buttons stack in their own

@@ -1,8 +1,20 @@
 // Skyreach version + in-game changelog. Newest entry first.
 // The current version badge and the "what's in this build" modal read from here.
-const GAME_VERSION = '0.14.1';
+const GAME_VERSION = '0.15.0';
 
 const CHANGELOG = [
+  {
+    version: '0.15.0',
+    name: 'Close In',
+    date: '2026-07-28',
+    notes: [
+      'The camera sits much closer, and everything that moves against you was slowed by about a third to match',
+      'A small joystick is now always visible in the bottom-left corner — the touch area around it is far larger than it looks',
+      'Messages moved to the top left, directly under the vital bars',
+      'The Skywyrm lives near the ceiling now, with a far smaller territory and a much tighter aggro range',
+      'Fixed the iOS long-press magnifier on action buttons: every control takes the pointer down itself instead of waiting for a click',
+    ],
+  },
   {
     version: '0.14.1',
     name: 'Debug Modes',
